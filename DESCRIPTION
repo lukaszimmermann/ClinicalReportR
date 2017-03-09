@@ -17,9 +17,6 @@ Imports:
     ReporteRs,
     XML,
     optparse,
-    biomaRt,
-    rDGIdb,
-    VariantAnnotation,
     readr
 Suggests:
     testthat
