@@ -12,7 +12,7 @@ options(warn=-1)
 
 # make sure that all required packages are available
 # this tries to install missing packages that are missing
-list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "jsonlite", "splitstackshape", "RMySQL", "XML", "ReporteRs", "optparse", "biomaRt")
+list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "RMySQL", "ReporteRs", "optparse", "readr")
 new.packages <- list.of.packages.cran[!(list.of.packages.cran %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages, repos = "http://cran.rstudio.com/")
 
@@ -23,7 +23,9 @@ if(length(new.packages)) {
   biocLite(new.packages)
 }
 
-lapply(c(list.of.packages.cran, list.of.packages.bioconductor), library, character.only=T)
+#lapply(c(list.of.packages.cran, list.of.packages.bioconductor), library, character.only=T)
+library(dplyr)
+
 
 # steps to make the ReporteRs library load:
 # 1. sudo R CMD javareconf
@@ -38,7 +40,8 @@ option_list = list(
   optparse::make_option(c("-d", "--database"), type = "character", help = "the database of the mydrug database", default = NULL),
   optparse::make_option(c("-u", "--username"), type = "character", help = "the username of the mydrug database", default = NULL),
   optparse::make_option(c("-p", "--password"), type = "character", help = "the password of the mydrug database", default = NULL),
-  optparse::make_option(c("-P", "--port"), type = "character", help = "the port of the mydrug database", default = 3306)
+  optparse::make_option(c("-P", "--port"), type = "character", help = "the port of the mydrug database", default = 3306),
+  optparse::make_option(c("-c", "--vepconfig"), type = "character", help = "ensembl-vep configuration file", default = NULL)
 )
 
 opt_parser <- optparse::OptionParser(option_list = option_list)
@@ -101,8 +104,8 @@ targets <- compounds %>%
 driver_genes <- dplyr::tbl_df(read.table(system.file('extdata','Drivers_type_role.tsv', package = 'ClinicalReportR'), sep="\t", header=T)) %>%
   dplyr::rename(Gene = geneHGNCsymbol) %>%
   dplyr::mutate(Gene = as.character(Gene)) %>%
-  group_by(Gene) %>%
-  summarise(Roles = paste(unique(Role), collapse=", "),
+  dplyr::group_by(Gene) %>%
+  dplyr::summarise(Roles = paste(unique(Role), collapse=", "),
             Driver_types = paste(unique(Driver_type), collapse=", "))
 
 ###################
@@ -111,14 +114,17 @@ driver_genes <- dplyr::tbl_df(read.table(system.file('extdata','Drivers_type_rol
 #
 ###################
 
-
-# a copy from example output of VEP from the respective INFO field
-header <- "Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation|DISTANCE|STRAND|FLAGS|PICK|VARIANT_CLASS|SYMBOL_SOURCE|HGNC_ID|CANONICAL|TSL|ENSP|SWISSPROT|TREMBL|UNIPARC|GENE_PHENO|SIFT|PolyPhen|DOMAINS|HGVS_OFFSET|CLIN_SIG|SOMATIC|PHENO|PUBMED|LoF|LoF_filter|LoF_flags|LoF_info|GO|LoFtool"
-fields <- stringr::str_split(header, "\\|")[[1]]
-
 # for testing
 #vcf <- VariantAnnotation::readVcf("inst/extdata/strelka.passed.missense.somatic.snvs-1_annotated.vcf")
 vcf <- VariantAnnotation::readVcf(vcfFile)
+info <- rownames(VariantAnnotation::info(VariantAnnotation::header(vcf)))
+if (!("CSQ" %in% info)) {
+  cmd <- paste("vep.pl --config", opt$vepconfig)
+  system(cmd)
+}
+
+header <- stringr::str_sub(VariantAnnotation::info(VariantAnnotation::header(vcf))["CSQ",3], 51)
+fields <- stringr::str_split(header, "\\|")[[1]]
 
 ann <- dplyr::tbl_df(VariantAnnotation::info(vcf)) %>%
   dplyr::select(CSQ)

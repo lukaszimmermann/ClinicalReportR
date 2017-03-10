@@ -15,7 +15,6 @@ Imports:
     splitstackshape,
     stringr,
     ReporteRs,
-    XML,
     optparse,
     readr
 Suggests:
