@@ -119,7 +119,10 @@ driver_genes <- dplyr::tbl_df(read.table(system.file('extdata','Drivers_type_rol
 vcf <- VariantAnnotation::readVcf(vcfFile)
 info <- rownames(VariantAnnotation::info(VariantAnnotation::header(vcf)))
 if (!("CSQ" %in% info)) {
-  cmd <- paste("vep.pl --config", opt$vepconfig)
+  cmd <- "vep.pl"
+  if (opt$vepconfig) {
+    cmd <- paste("vep.pl --config", opt$vepconfig)
+  }
   system(cmd)
 }
 

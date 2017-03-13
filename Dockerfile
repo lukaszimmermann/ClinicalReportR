@@ -15,4 +15,11 @@ RUN Rscript -e 'install.packages("devtools", repos = "http://cran.uni-muenster.d
 
 RUN Rscript -e 'devtools::install_github("PersonalizedOncology/ClinicalReportR", dependencies = TRUE)'
 
-CMD ["/usr/bin/Rscript", "/usr/local/lib/R/site-library/ClinicalReportR/cmd/reporting.R"]
+RUN mkdir -p ~/.vep
+COPY vep.ini ~/.vep/vep.ini
+
+RUN mkdir /reporting
+WORKDIR /reporting
+RUN ln -s /usr/local/lib/R/site-library/ClinicalReportR/cmd/reporting.R
+
+CMD ["/usr/bin/Rscript", "/reporting/reporting.R"]
