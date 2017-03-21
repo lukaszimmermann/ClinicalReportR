@@ -15,8 +15,11 @@ Imports:
     splitstackshape,
     stringr,
     ReporteRs,
+    XML,
     optparse,
+    VariantAnnotation,
     readr
 Suggests:
     testthat
+    opencpu
 RoxygenNote: 5.0.1
