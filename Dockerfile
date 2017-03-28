@@ -9,14 +9,23 @@ RUN sudo sh -c 'echo "deb http://cran.rstudio.com/bin/linux/ubuntu trusty/" >> /
 
 RUN R CMD javareconf
 
+# opencpu
+# the following two packages are required for add-apt-repository only and could
+# thus be removed if the ppa can be added to /etc/apt/sources.list as above directly
+RUN sudo apt-get install -y software-properties-common python-software-properties
+RUN sudo add-apt-repository -y ppa:opencpu/opencpu-1.6 && \
+  sudo apt-get -y update && \
+  sudo apt-get -y upgrade && \
+  sudo apt-get install -y opencpu-server
+
 # install required R packages
-RUN Rscript -e 'install.packages("devtools", repos = "http://cran.uni-muenster.de/", dependencies = TRUE)' && \
+RUN Rscript -e 'install.packages(c("devtools", "tidyr"), repos = "http://cran.uni-muenster.de/", dependencies = TRUE)' && \
   Rscript -e 'source("https://bioconductor.org/biocLite.R"); biocLite("VariantAnnotation")'
 
 RUN Rscript -e 'devtools::install_github("PersonalizedOncology/ClinicalReportR", dependencies = TRUE)'
 
-RUN mkdir -p ~/.vep
-COPY vep.ini ~/.vep/vep.ini
+RUN mkdir -p /vep/.vep
+COPY vep_docker.ini /vep/.vep/vep.ini
 
 RUN mkdir /reporting
 WORKDIR /reporting

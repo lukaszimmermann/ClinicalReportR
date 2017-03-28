@@ -20,6 +20,7 @@ Imports:
     VariantAnnotation,
     readr
 Suggests:
-    testthat
-    opencpu
+    testthat,
+    opencpu,
+    ensemblVEP
 RoxygenNote: 5.0.1
