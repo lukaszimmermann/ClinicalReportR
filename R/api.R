@@ -13,7 +13,7 @@
   param
 }
 
-# Annotates a vcf file with ensembleVEP and returns all annotations in a data frame.
+# Annotates the input_file in vcf format with ensembleVEP and stores the result in output_file.
 #' @export
 annotate <- function(input_file, output_file) {
   param <- .defaultConfig()
