@@ -15,7 +15,7 @@ RUN sudo sh -c 'echo "deb http://cran.rstudio.com/bin/linux/ubuntu trusty/" >> /
  apt-get install -y r-base r-base-dev libcurl4-openssl-dev openjdk-7-jdk r-cran-rjava libssh2-1-dev libcairo2-dev \
   r-cran-devtools r-cran-tidyr r-cran-dplyr r-cran-rmysql r-cran-reporters r-cran-stringr r-cran-xml r-cran-optparse \
   r-cran-readr r-bioc-biocgenerics r-bioc-genomicranges r-bioc-biostrings r-bioc-genomeinfodb r-bioc-summarizedexperiment \
-  r-bioc-rsamtools r-bioc-biobase r-bioc-iranges r-bioc-annotationdbi r-bioc-bsgenome r-bioc-genomicfeatures r-bioc-rtracklayer
+  r-bioc-rsamtools r-bioc-biobase r-bioc-iranges r-bioc-annotationdbi r-bioc-genomicalignments
 
 RUN R CMD javareconf
 
