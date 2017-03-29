@@ -19,15 +19,6 @@ RUN sudo sh -c 'echo "deb http://cran.rstudio.com/bin/linux/ubuntu trusty/" >> /
 
 RUN R CMD javareconf
 
-# install opencpu
-#RUN \
-#  apt-get update && \
-#  apt-get -y dist-upgrade && \
-#  apt-get install -y software-properties-common && \
-#  add-apt-repository -y ppa:opencpu/opencpu-1.6 && \
-#  apt-get update && \
-#  apt-get install -y opencpu
-
 # install R package
 RUN \
   Rscript -e 'source("https://bioconductor.org/biocLite.R"); biocLite(c("VariantAnnotation", "ensemblVEP"), ask = FALSE, suppressUpdates = TRUE)' && \
