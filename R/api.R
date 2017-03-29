@@ -1,7 +1,8 @@
+# Annotates a vcf file with ensembleVEP and returns all annotations in a data frame.
 #' @export
-annotate <- function(vcfFile) {
+annotate <- function(input_file, output_file) {
   param <- ensemblVEP::VEPParam(basic = list(config = "/vep/.vep/vep.ini"),
-                                input=list(species=character(0)),
+                                input=list(species=character(0), output_file=output_file),
                                 cache=list(dir = character(0), dir_cache=character(0), dir_plugins=character(0)),
                                 output=list(terms = character(0)),
                                 filterqc=list(),
@@ -12,5 +13,6 @@ annotate <- function(vcfFile) {
                                 dataformat = list(),
                                 scriptPath = "/usr/bin/vep.pl")
 
-  ensemblVEP::ensemblVEP(vcfFile, param)
+  ann <- ensemblVEP::ensemblVEP(input_file, param)
 }
+
