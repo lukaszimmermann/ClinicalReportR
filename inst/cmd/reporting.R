@@ -59,71 +59,24 @@ if (is.null(reportFile)) {
   reportFile <- paste(tools::file_path_sans_ext(vcfFile), "docx", sep=".")
 }
 
-###################
-#
-# create database objects
-#
-###################
-
-# create civic variant database from nightly updates
-civic_variants <- read.table('https://civic.genome.wustl.edu/downloads/nightly/nightly-ClinicalEvidenceSummaries.tsv', sep="\t", header=T, fill = T, quote = "\"", comment.char = "%") %>%
-  dplyr::rename(chr=chromosome, alt=variant_bases, ref=reference_bases) %>%
-  filter(evidence_status == "accepted")
-
-civic_genes <- civic_variants %>%
-  dplyr::filter(drugs != "") %>%
-  dplyr::group_by(gene) %>%
-  # TODO: check if existing concatenations of drugs are due to combination therapy (here we throw them all together)
-  dplyr::summarise(drugs = paste(unique(stringr::str_trim(unlist(stringr::str_split(drugs, ",")))),collapse=" | "),
-                   clinical_significance = paste(unique(clinical_significance),collapse=" | "),
-                   pubmed_ids = paste(unique(pubmed_id),collapse=" | "))
-
-# Drug targets
-my_drug_con <- dplyr::src_mysql(opt$database, opt$host, as.integer(opt$port), opt$user, opt$password)
-
-compounds <- dplyr::tbl(my_drug_con, "compound") %>%
-  dplyr::collect()
-compound2gene <- dplyr::tbl(my_drug_con, "compound2gene") %>%
-  dplyr::collect()
-variant2compound <- dplyr::tbl(my_drug_con, "variant2compound") %>%
-  dplyr::collect()
-
-targets <- compounds %>%
-  dplyr::left_join(compound2gene) %>%
-  dplyr::filter(interaction_type == "target") %>%
-  splitstackshape::cSplit("ATC", sep = "|", direction = "long") %>%
-  dplyr::filter_(quote(base::grepl("^L.*", ATC))) %>%
-  dplyr::select(interaction_type = target_action, name, gene = gene_symbol, isFdaApproved, drugbank_pubmed_id, iuphar_pubmed_id) %>%
-  dplyr::group_by(gene) %>%
-  dplyr::summarise_(
-    drugs = quote(paste(unique(stringr::str_trim(unlist(stringr::str_split(name, "\\|")))),collapse=" | ")),
-    interaction_type = quote(paste(unique(stringr::str_trim(unlist(stringr::str_split(interaction_type, "\\|")))),collapse=" | ")),
-    pubmed_ids = quote(paste(unique(stringr::str_trim(unlist(c(stringr::str_split(drugbank_pubmed_id, "\\|"), stringr::str_split(iuphar_pubmed_id, "\\|"))))), collapse=" | "))
-  )
-
-driver_genes <- dplyr::tbl_df(read.table(system.file('extdata','Drivers_type_role.tsv', package = 'ClinicalReportR'), sep="\t", header=T)) %>%
-  dplyr::rename(Gene = geneHGNCsymbol) %>%
-  dplyr::mutate(Gene = as.character(Gene)) %>%
-  dplyr::group_by(Gene) %>%
-  dplyr::summarise(Roles = paste(unique(Role), collapse=", "),
-            Driver_types = paste(unique(Driver_type), collapse=", "))
+dbs <- ClinicalReportR::updateDatabases(opt$database, opt$host, as.integer(opt$port), opt$user, opt$password)
 
 ###################
 #
-# read VCF file
+# annotate VCF file
 #
 ###################
 
 # for testing
-#vcf <- VariantAnnotation::readVcf("inst/extdata/strelka.passed.missense.somatic.snvs-1_annotated.vcf")
+#vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs-1_annotated.vcf"
+#vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs_short.vcf"
+
 vcf <- VariantAnnotation::readVcf(vcfFile)
 info <- rownames(VariantAnnotation::info(VariantAnnotation::header(vcf)))
 if (!("CSQ" %in% info)) {
-  cmd <- "vep.pl"
-  if (opt$vepconfig) {
-    cmd <- paste("vep.pl --config", opt$vepconfig)
-  }
-  system(cmd)
+  dest <- file.path(tempfile())
+  ClinicalReportR::annotate(vcfFile, dest)
+  vcf <- VariantAnnotation::readVcf(dest)
 }
 
 header <- stringr::str_sub(VariantAnnotation::info(VariantAnnotation::header(vcf))["CSQ",3], 51)
@@ -162,22 +115,22 @@ mvld <- location %>%
   tidyr::unite_("Mutation", c("Type", "DNA", "Protein", "Consequence"), sep="\n")
 
 lof_driver <- mvld %>%
-  left_join(driver_genes) %>%
+  left_join(dbs$driver_genes) %>%
   filter(!is.na(Roles)) %>%
   dplyr::select(Gene, Mutation, Roles)
 
 lof_variant_dt_table <- mvld %>%
-  left_join(targets, by=c("Gene" = "gene")) %>%
+  left_join(dbs$targets, by=c("Gene" = "gene")) %>%
   filter(!is.na(drugs)) %>%
   dplyr::select(Gene, Mutation, Drugs = drugs, Pubmed = pubmed_ids)
 
 lof_civic_dt_table <- mvld %>%
-  left_join(civic_genes, by=c("Gene" = "gene")) %>%
+  left_join(dbs$civic_genes, by=c("Gene" = "gene")) %>%
   filter(!is.na(drugs)) %>%
   dplyr::select(Gene, Mutation, Drugs = drugs, Pubmed = pubmed_ids)
 
 drug_variants <- mvld %>%
-  inner_join(civic_variants, by = c("chr", "start", "ref", "alt")) %>%
+  inner_join(dbs$civic_variants, by = c("chr", "start", "ref", "alt")) %>%
   mutate(drugs = as.character(drugs)) %>%
   filter(stringr::str_length(stringr::str_trim((drugs))) > 0) %>%
   filter(variant_origin == "Somatic Mutation") %>%
