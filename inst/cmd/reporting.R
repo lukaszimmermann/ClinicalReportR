@@ -10,6 +10,27 @@
 
 options(warn=-1)
 
+# parse command-line parameters
+option_list = list(
+  optparse::make_option(c("-f", "--file"), type = "character", help = "the input file in vcf format", default = NULL),
+  optparse::make_option(c("-r", "--report"), type = "character", help = "the file name for the detailed output report", default = NULL),
+  #optparse::make_option(c("-H", "--host"), type = "character", help = "the hostname of the mydrug database", default = NULL),
+  #optparse::make_option(c("-d", "--database"), type = "character", help = "the database of the mydrug database", default = NULL),
+  #optparse::make_option(c("-u", "--username"), type = "character", help = "the username of the mydrug database", default = NULL),
+  #optparse::make_option(c("-p", "--password"), type = "character", help = "the password of the mydrug database", default = NULL),
+  #optparse::make_option(c("-P", "--port"), type = "character", help = "the port of the mydrug database", default = 3306),
+  #optparse::make_option(c("-c", "--vepconfig"), type = "character", help = "ensembl-vep configuration file", default = NULL),
+  optparse::make_option(c("-t", "--test"), type = "logical", help = "generate test report", default = FALSE)
+)
+
+opt_parser <- optparse::OptionParser(option_list = option_list)
+opt <- optparse::parse_args(opt_parser)
+
+if (!opt$test && (is.null(opt$file) || !file.exists(opt$file))) {
+  optparse::print_help(opt_parser)
+  stop("Please supply an existing input file via -f")
+}
+
 # make sure that all required packages are available
 # this tries to install missing packages that are missing
 list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "RMySQL", "ReporteRs", "optparse", "readr")
@@ -23,8 +44,8 @@ if(length(new.packages)) {
   biocLite(new.packages)
 }
 
-#lapply(c(list.of.packages.cran, list.of.packages.bioconductor), library, character.only=T)
-library(dplyr)
+lapply(c(list.of.packages.cran, list.of.packages.bioconductor), library, character.only=T)
+#library(dplyr)
 
 
 # steps to make the ReporteRs library load:
@@ -32,44 +53,33 @@ library(dplyr)
 # 2. sudo ln -f -s $(/usr/libexec/java_home)/jre/lib/server/libjvm.dylib /usr/local/lib
 # 3. install.packages("rJava", type = "source")
 
-# parse command-line parameters
-option_list = list(
-  optparse::make_option(c("-f", "--file"), type = "character", help = "the input file in vcf format", default = NULL),
-  optparse::make_option(c("-r", "--report"), type = "character", help = "the file name for the detailed output report", default = NULL),
-  optparse::make_option(c("-H", "--host"), type = "character", help = "the hostname of the mydrug database", default = NULL),
-  optparse::make_option(c("-d", "--database"), type = "character", help = "the database of the mydrug database", default = NULL),
-  optparse::make_option(c("-u", "--username"), type = "character", help = "the username of the mydrug database", default = NULL),
-  optparse::make_option(c("-p", "--password"), type = "character", help = "the password of the mydrug database", default = NULL),
-  optparse::make_option(c("-P", "--port"), type = "character", help = "the port of the mydrug database", default = 3306),
-  optparse::make_option(c("-c", "--vepconfig"), type = "character", help = "ensembl-vep configuration file", default = NULL)
-)
 
-opt_parser <- optparse::OptionParser(option_list = option_list)
-opt <- optparse::parse_args(opt_parser)
 
-if (is.null(opt$file) || !file.exists(opt$file)) {
-  optparse::print_help(opt_parser)
-  stop("Please supply an existing input file via -f")
-}
+# set this manually to run code interactively
+debug <- opt$test
+#debug <- TRUE
 
 vcfFile <- opt$file
 reportFile <- opt$report
 
+if (debug) {
+  # for testing
+  #vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs-1_annotated.vcf"
+  #vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs_short.vcf"
+
+  # test without annotation
+  vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs-1_annotated.vcf"
+}
+
 if (is.null(reportFile)) {
   reportFile <- paste(tools::file_path_sans_ext(vcfFile), "docx", sep=".")
 }
-
-dbs <- ClinicalReportR::updateDatabases(opt$database, opt$host, as.integer(opt$port), opt$user, opt$password)
 
 ###################
 #
 # annotate VCF file
 #
 ###################
-
-# for testing
-#vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs-1_annotated.vcf"
-#vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs_short.vcf"
 
 vcf <- VariantAnnotation::readVcf(vcfFile)
 info <- rownames(VariantAnnotation::info(VariantAnnotation::header(vcf)))
@@ -115,22 +125,22 @@ mvld <- location %>%
   tidyr::unite_("Mutation", c("Type", "DNA", "Protein", "Consequence"), sep="\n")
 
 lof_driver <- mvld %>%
-  left_join(dbs$driver_genes) %>%
+  left_join(ClinicalReportR::dbs$driver_genes) %>%
   filter(!is.na(Roles)) %>%
   dplyr::select(Gene, Mutation, Roles)
 
 lof_variant_dt_table <- mvld %>%
-  left_join(dbs$targets, by=c("Gene" = "gene")) %>%
+  left_join(ClinicalReportR::dbs$targets, by=c("Gene" = "gene")) %>%
   filter(!is.na(drugs)) %>%
   dplyr::select(Gene, Mutation, Drugs = drugs, Pubmed = pubmed_ids)
 
 lof_civic_dt_table <- mvld %>%
-  left_join(dbs$civic_genes, by=c("Gene" = "gene")) %>%
+  left_join(ClinicalReportR::dbs$civic_genes, by=c("Gene" = "gene")) %>%
   filter(!is.na(drugs)) %>%
   dplyr::select(Gene, Mutation, Drugs = drugs, Pubmed = pubmed_ids)
 
 drug_variants <- mvld %>%
-  inner_join(dbs$civic_variants, by = c("chr", "start", "ref", "alt")) %>%
+  inner_join(ClinicalReportR::dbs$civic_variants, by = c("chr", "start", "ref", "alt")) %>%
   mutate(drugs = as.character(drugs)) %>%
   filter(stringr::str_length(stringr::str_trim((drugs))) > 0) %>%
   filter(variant_origin == "Somatic Mutation") %>%

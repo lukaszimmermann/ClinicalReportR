@@ -4,6 +4,7 @@
 #
 ###################
 
+# Updates database objects.
 updateDatabases <- function(database, host, port, user, password) {
 
   # create civic variant database from nightly updates
@@ -49,5 +50,6 @@ updateDatabases <- function(database, host, port, user, password) {
     dplyr::summarise(Roles = paste(unique(Role), collapse=", "),
                      Driver_types = paste(unique(Driver_type), collapse=", "))
 
-  return(list(civic_genes, civic_variants, targets, driver_genes))
+  dbs <- list(civic_genes=civic_genes, civic_variants=civic_variants, targets=targets, driver_genes=driver_genes)
+  devtools::use_data(dbs)
 }
