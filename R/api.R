@@ -9,7 +9,7 @@
                        identifier=list(),
                        colocatedVariants = list(),
                        dataformat = list(),
-                       scriptPath = "/usr/bin/vep.pl")
+                       scriptPath = "/home/vep/src/ensembl-vep/vep")
   param
 }
 

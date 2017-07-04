@@ -1,5 +1,6 @@
-FROM personalizedoncology/vep_plugins_containerized
+FROM personalizedoncology/vep_plugins_containerized:release_88
 
+USER root
 # install current version of R and required packages
 RUN sudo sh -c 'echo "deb http://cran.rstudio.com/bin/linux/ubuntu trusty/" >> /etc/apt/sources.list' && \
  sudo sh -c 'echo "deb http://ftp.halifax.rwth-aachen.de/ubuntu trusty-backports main restricted universe" >> /etc/apt/sources.list' && \
@@ -26,13 +27,12 @@ RUN \
   Rscript -e 'devtools::install_github("PersonalizedOncology/ClinicalReportR", dependencies = TRUE)'
 
 # copy configuration files
-RUN mkdir -p /vep/.vep
-COPY vep_docker.ini /vep/.vep/vep.ini
+COPY inst/extdata/vep_docker.ini /home/vep/.vep/vep.ini
 
 COPY opencpu.conf /etc/opencpu/server.conf
 
-RUN mkdir /reporting
-WORKDIR /reporting
+USER vep
+WORKDIR /home/vep
 RUN ln -s /usr/local/lib/R/site-library/ClinicalReportR/cmd/reporting.R
 
 # Apache ports
@@ -44,4 +44,4 @@ EXPOSE 8004
 CMD service opencpu restart && tail -F /var/log/opencpu/apache_access.log
 
 # Development
-COPY inst/extdata/strelka.passed.missense.somatic.snvs_short.vcf /vep/test.vcf
+COPY inst/extdata/strelka.passed.missense.somatic.snvs_short.vcf /home/vep/test.vcf

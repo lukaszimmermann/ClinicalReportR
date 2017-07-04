@@ -1,0 +1,6 @@
+WARNING: Failed to compile plugin LoF: Can't locate splice_module.pl in @INC (@INC contains: /home/vep/.vep/Plugins /home/vep/src/ensembl-vep/modules /home/vep/src/ensembl-vep /vep/loftee-master/ /home/vep/src/bioperl-live-release-1-6-924 /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.22.1 /usr/local/share/perl/5.22.1 /usr/lib/x86_64-linux-gnu/perl5/5.22 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl/5.22 /usr/share/perl/5.22 /usr/local/lib/site_perl /usr/lib/x86_64-linux-gnu/perl-base .) at /home/vep/.vep/Plugins/LoF.pm line 24.
+Compilation failed in require at (eval 41) line 2.
+BEGIN failed--compilation aborted at (eval 41) line 2.
+
+WARNING: Failed to instantiate plugin LoFtool: ERROR: LoFtool scores file /vep/LoFtool_scores.txt not found
+
