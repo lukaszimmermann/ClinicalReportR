@@ -14,11 +14,6 @@ options(warn=-1)
 option_list = list(
   optparse::make_option(c("-f", "--file"), type = "character", help = "the input file in vcf format", default = NULL),
   optparse::make_option(c("-r", "--report"), type = "character", help = "the file name for the detailed output report", default = NULL),
-  #optparse::make_option(c("-H", "--host"), type = "character", help = "the hostname of the mydrug database", default = NULL),
-  #optparse::make_option(c("-d", "--database"), type = "character", help = "the database of the mydrug database", default = NULL),
-  #optparse::make_option(c("-u", "--username"), type = "character", help = "the username of the mydrug database", default = NULL),
-  #optparse::make_option(c("-p", "--password"), type = "character", help = "the password of the mydrug database", default = NULL),
-  #optparse::make_option(c("-P", "--port"), type = "character", help = "the port of the mydrug database", default = 3306),
   #optparse::make_option(c("-c", "--vepconfig"), type = "character", help = "ensembl-vep configuration file", default = NULL),
   optparse::make_option(c("-t", "--test"), type = "logical", help = "generate test report", default = FALSE)
 )
@@ -45,15 +40,11 @@ if(length(new.packages)) {
 }
 
 lapply(c(list.of.packages.cran, list.of.packages.bioconductor), library, character.only=T)
-#library(dplyr)
-
 
 # steps to make the ReporteRs library load:
 # 1. sudo R CMD javareconf
 # 2. sudo ln -f -s $(/usr/libexec/java_home)/jre/lib/server/libjvm.dylib /usr/local/lib
 # 3. install.packages("rJava", type = "source")
-
-
 
 # set this manually to run code interactively
 debug <- opt$test
@@ -112,35 +103,79 @@ mvld <- location %>%
   tidyr::unnest(CSQ) %>%
   tidyr::separate("CSQ", fields, sep = "\\|") %>%
   filter(PICK == 1) %>% # filter only transcripts that VEP picked
-  filter(BIOTYPE == "protein_coding" & Consequence != "synonymous_variant" | Consequence != "intron_variant") %>%
+  filter(BIOTYPE == "protein_coding" & Consequence != "synonymous_variant" & Consequence != "intron_variant") %>%
   mutate(Consequence = stringr::str_replace_all(stringr::str_extract(Consequence, "^(?:(?!_variant)\\w)*"), "_", " "),
          reference_build = "GRCh37",
+         HGNC_ID = as.integer(HGNC_ID),
          dbSNP = as.character(stringr::str_extract_all(Existing_variation, "rs\\w+")),
          COSMIC = as.character(stringr::str_extract_all(Existing_variation, "COSM\\w+")),
          DNA = stringr::str_extract(HGVSc, "(?<=:).*"),
          Protein = stringr::str_extract(HGVSp, "(?<=:).*")) %>% # positive lookbehind
   dplyr::select(-Gene) %>%       # drop Ensembl Gene ID as we're using HUGO from here on
-  dplyr::rename(Gene = SYMBOL, Type = VARIANT_CLASS) %>%
-  filter(LoF != "" | startsWith(SIFT, "deleterious") | endsWith(PolyPhen, "damaging")) %>%
-  tidyr::unite_("Mutation", c("Type", "DNA", "Protein", "Consequence"), sep="\n")
+  dplyr::rename(Gene = SYMBOL, Type = VARIANT_CLASS, Mutation = Protein) %>%
+  filter(LoF != "" | startsWith(SIFT, "deleterious") | endsWith(PolyPhen, "damaging"))
+  #tidyr::unite_("Mutation", c("Type", "DNA", "Protein", "Consequence"), sep="\n")
 
+db_baseurl = 'http://localhost:5000/biograph_genes?where={"meta_information.hgnc_id":{"$in":['
+querystring = URLencode(paste(db_baseurl, paste(mvld$HGNC_ID, collapse = ","), ']}}', sep=""))
+
+db_query <- fromJSON(querystring, flatten = T)
+oncogenes <- tbl_df(db_query$`_items`)
+mvld <- mvld %>%
+  left_join(oncogenes, by=c("HGNC_ID" = "meta_information.hgnc_id"))
+
+# helper function extracting only cancer-relevant drugs
+extract_cancer_drugs <- function(x) {
+  if (is.null(x)) {
+    return("")
+  }
+  y <- tbl_df(x) %>%
+    dplyr::filter(base::grepl("^L.*", ATC_code)) %>%
+    dplyr::filter(!is.na(drug_name)) %>%
+    dplyr::mutate(drug_name = tolower(drug_name))
+  paste(unique(y$drug_name), collapse = ",")
+}
+
+# driver genes with loss of function (lof)
 lof_driver <- mvld %>%
-  left_join(ClinicalReportR::dbs$driver_genes) %>%
-  filter(!is.na(Roles)) %>%
-  dplyr::select(Gene, Mutation, Roles)
+  dplyr::filter(nodes.is_driver) %>%
+  mutate(Driver = lapply(meta_information.driver_information, function(x) {  paste(unique(x$driver_type), sep = ",", collapse = ",") }),
+         Pathway = lapply(meta_information.driver_information, function(x) {  ifelse(is.null(x$core_pathway), "", x$core_pathway) }),
+         Process = lapply(meta_information.driver_information, function(x) {  ifelse(is.null(x$Process), "", x$Process) }),
+         Therapy = lapply(meta_information.drugs, extract_cancer_drugs)
+         ) %>%
+  dplyr::select(Gene, Mutation, Driver, Pathway, Process, Therapy)
 
+# drug targets (dt) with loss of function (lof)
 lof_variant_dt_table <- mvld %>%
-  left_join(ClinicalReportR::dbs$targets, by=c("Gene" = "gene")) %>%
-  filter(!is.na(drugs)) %>%
-  dplyr::select(Gene, Mutation, Drugs = drugs, Pubmed = pubmed_ids)
+  dplyr::filter(!nodes.is_driver) %>%
+  #dplyr::filter(!unlist(lapply(meta_information.drugs, is.null))) %>%
+  mutate(Pathway = lapply(meta_information.driver_information, function(x) {  ifelse(is.null(x$core_pathway), "", x$core_pathway) }),
+         Process = lapply(meta_information.driver_information, function(x) {  ifelse(is.null(x$Process), "", x$Process) }),
+         Therapy = lapply(meta_information.drugs, extract_cancer_drugs)
+  ) %>%
+  dplyr::filter(Therapy != "") %>%
+  dplyr::select(Gene, Mutation, Pathway, Process, Therapy)
+
+civic_variants <- read.table('https://civic.genome.wustl.edu/downloads/nightly/nightly-ClinicalEvidenceSummaries.tsv', sep="\t", header=T, fill = T, quote = "\"", comment.char = "%") %>%
+  dplyr::rename(chr=chromosome, alt=variant_bases, ref=reference_bases) %>%
+  filter(evidence_status == "accepted")
+
+civic_genes <- civic_variants %>%
+  dplyr::filter(drugs != "") %>%
+  dplyr::group_by(gene) %>%
+  # TODO: check if existing concatenations of drugs are due to combination therapy (here we throw them all together)
+  dplyr::summarise(drugs = paste(unique(stringr::str_trim(unlist(stringr::str_split(drugs, ",")))),collapse=" | "),
+                   clinical_significance = paste(unique(clinical_significance),collapse=" | "),
+                   pubmed_ids = paste(unique(pubmed_id),collapse=" | "))
 
 lof_civic_dt_table <- mvld %>%
-  left_join(ClinicalReportR::dbs$civic_genes, by=c("Gene" = "gene")) %>%
+  left_join(civic_genes, by=c("Gene" = "gene")) %>%
   filter(!is.na(drugs)) %>%
   dplyr::select(Gene, Mutation, Drugs = drugs, Pubmed = pubmed_ids)
 
 drug_variants <- mvld %>%
-  inner_join(ClinicalReportR::dbs$civic_variants, by = c("chr", "start", "ref", "alt")) %>%
+  inner_join(civic_variants, by = c("chr", "start", "ref", "alt")) %>%
   mutate(drugs = as.character(drugs)) %>%
   filter(stringr::str_length(stringr::str_trim((drugs))) > 0) %>%
   filter(variant_origin == "Somatic Mutation") %>%
