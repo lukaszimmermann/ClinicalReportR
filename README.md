@@ -4,6 +4,9 @@ This is a prototype implementation of a clinical reporting pipeline in R.
 Currently, it creates a genetic report of somatic mutations from a vcf file annotated via https://github.com/PersonalizedOncology/vep_plugins_containerized.
 You can find an example report and corresponding template in inst/extdata.
 
+## Prerequisites
+A running REST service for the Biograph data. This is currently under development.
+
 ## Installation
 Simply install this R package
 
