@@ -66,6 +66,23 @@ if (is.null(reportFile)) {
   reportFile <- paste(tools::file_path_sans_ext(vcfFile), "docx", sep=".")
 }
 
+
+###################
+# update CiVIC data
+###################
+
+civic_evidence <- read.table('https://civic.genome.wustl.edu/downloads/nightly/nightly-ClinicalEvidenceSummaries.tsv', sep="\t", header=T, fill = T, quote = "\"", comment.char = "%") %>%
+  dplyr::rename(chr=chromosome, alt=variant_bases, ref=reference_bases) %>%
+  filter(evidence_status == "accepted")
+
+civic_genes <- civic_evidence %>%
+  dplyr::filter(drugs != "") %>%
+  dplyr::group_by(gene) %>%
+  # TODO: check if existing concatenations of drugs are due to combination therapy (here we throw them all together)
+  dplyr::summarise(drugs = paste(unique(stringr::str_trim(unlist(stringr::str_split(drugs, ",")))),collapse=" | "),
+                   clinical_significance = paste(unique(clinical_significance),collapse=" | "),
+                   pubmed_ids = paste(unique(pubmed_id),collapse=" | "))
+
 ###################
 #
 # annotate VCF file
@@ -96,12 +113,14 @@ fixed$ALT <- unlist(lapply(fixed$ALT, toString))
 mvld <- location %>%
   bind_cols(tbl_df(fixed)) %>%
   bind_cols(ann) %>%
-  filter(FILTER == "PASS") %>% # filter quality
   mutate(chr = stringr::str_extract(chr, "[0-9,X,Y]+")) %>%
   # select only fixed VCF columns plus VEP annotations!
   dplyr::select(chr, start, end, width, location, ref = REF, alt = ALT, qual = QUAL, filter = FILTER, CSQ) %>%
   tidyr::unnest(CSQ) %>%
   tidyr::separate("CSQ", fields, sep = "\\|") %>%
+#  left_join(civic_evidence, by = c("chr", "start", "ref", "alt")) %>%
+#  dplyr::rename(civic_drugs = drugs) %>%
+  filter(filter == "PASS") %>% # filter quality
   filter(PICK == 1) %>% # filter only transcripts that VEP picked
   filter(BIOTYPE == "protein_coding" & Consequence != "synonymous_variant" & Consequence != "intron_variant") %>%
   mutate(Consequence = stringr::str_replace_all(stringr::str_extract(Consequence, "^(?:(?!_variant)\\w)*"), "_", " "),
@@ -136,17 +155,17 @@ extract_cancer_drugs <- function(x) {
   paste(unique(y$drug_name), collapse = ",")
 }
 
-# driver genes with loss of function (lof)
+# driver genes with mutation
 lof_driver <- mvld %>%
   dplyr::filter(nodes.is_driver) %>%
-  mutate(Driver = lapply(meta_information.driver_information, function(x) {  paste(unique(x$driver_type), sep = ",", collapse = ",") }),
+  mutate(Driver = lapply(meta_information.driver_information, function(x) {  paste(unique(x$driver_type), sep = "\n", collapse = "\n") }),
          Pathway = lapply(meta_information.driver_information, function(x) {  ifelse(is.null(x$core_pathway), "", x$core_pathway) }),
          Process = lapply(meta_information.driver_information, function(x) {  ifelse(is.null(x$Process), "", x$Process) }),
          Therapy = lapply(meta_information.drugs, extract_cancer_drugs)
          ) %>%
   dplyr::select(Gene, Mutation, Driver, Pathway, Process, Therapy)
 
-# drug targets (dt) with loss of function (lof)
+# drug targets with mutation
 lof_variant_dt_table <- mvld %>%
   dplyr::filter(!nodes.is_driver) %>%
   #dplyr::filter(!unlist(lapply(meta_information.drugs, is.null))) %>%
@@ -157,31 +176,22 @@ lof_variant_dt_table <- mvld %>%
   dplyr::filter(Therapy != "") %>%
   dplyr::select(Gene, Mutation, Pathway, Process, Therapy)
 
-civic_variants <- read.table('https://civic.genome.wustl.edu/downloads/nightly/nightly-ClinicalEvidenceSummaries.tsv', sep="\t", header=T, fill = T, quote = "\"", comment.char = "%") %>%
-  dplyr::rename(chr=chromosome, alt=variant_bases, ref=reference_bases) %>%
-  filter(evidence_status == "accepted")
-
-civic_genes <- civic_variants %>%
-  dplyr::filter(drugs != "") %>%
-  dplyr::group_by(gene) %>%
-  # TODO: check if existing concatenations of drugs are due to combination therapy (here we throw them all together)
-  dplyr::summarise(drugs = paste(unique(stringr::str_trim(unlist(stringr::str_split(drugs, ",")))),collapse=" | "),
-                   clinical_significance = paste(unique(clinical_significance),collapse=" | "),
-                   pubmed_ids = paste(unique(pubmed_id),collapse=" | "))
-
+# civic targets with mutation
 lof_civic_dt_table <- mvld %>%
   left_join(civic_genes, by=c("Gene" = "gene")) %>%
   filter(!is.na(drugs)) %>%
   dplyr::select(Gene, Mutation, Drugs = drugs, Pubmed = pubmed_ids)
 
+# mutation-specific annotations (from civic)
 drug_variants <- mvld %>%
-  inner_join(civic_variants, by = c("chr", "start", "ref", "alt")) %>%
+  inner_join(civic_evidence, by = c("chr", "start", "ref", "alt")) %>%
   mutate(drugs = as.character(drugs)) %>%
   filter(stringr::str_length(stringr::str_trim((drugs))) > 0) %>%
   filter(variant_origin == "Somatic Mutation") %>%
   #group_by(variant_id) %>%
   #summarise()
-  dplyr::select(Gene, Mutation, Drugs = drugs, Disease = disease, Biomarker = evidence_type, Effect = clinical_significance, Evidence = evidence_level, Pubmed = pubmed_id) %>%
+  #dplyr::select(Gene, Mutation, Drugs = drugs, Disease = disease, Biomarker = evidence_type, Effect = clinical_significance, Evidence = evidence_level, Pubmed = pubmed_id) %>%
+  dplyr::select(Gene, Mutation, Drugs = drugs, Disease = disease, Evidence = evidence_level, Pubmed = pubmed_id) %>%
   arrange(Evidence)
 
 ###################
@@ -194,27 +204,87 @@ drug_variants <- mvld %>%
 template_file <- system.file('extdata','template_report_en.docx',package = 'ClinicalReportR')
 mydoc <- ReporteRs::docx(template = template_file)
 
+
+# Some default props
+body.par.props = parProperties(text.align = "center",
+                               border.bottom = borderNone(),
+                               border.left = borderNone())
+body.cell.props = cellProperties(padding = 3)
+header.par.props = parProperties(text.align = "center")
+
+options('ReporteRs-default-font' = "Verdana")
+
 # DRIVER
 if (nrow(lof_driver) > 0) {
-  my_driver_FTable = ReporteRs::light.table(data = as.data.frame(lof_driver), add.rownames = FALSE)
+  my_driver_FTable = ReporteRs::FlexTable(data = as.data.frame(lof_driver), add.rownames = FALSE,
+                                          body.par.props = body.par.props,
+                                          body.cell.props = body.cell.props,
+                                          header.par.props = header.par.props) %>%
+    setFlexTableWidths(widths = c(.8, 1.2, 1, 1, 1, 2)) %>%
+    setFlexTableBorders(inner.vertical = borderProperties(width = 0),
+                        inner.horizontal = borderProperties(width = 0), outer.vertical = borderProperties(width = 0),
+                        outer.horizontal = borderProperties(width = 2)) %>%
+    addHeaderRow(value = c('Somatic Mutations in Driver Genes'), colspan = c(ncol(lof_driver)),
+                 text.properties = textProperties(color = "white", font.size = 16),
+                 cell.properties = cellProperties(background.color = "#14731C"),
+                 first = TRUE)
+
   mydoc <- ReporteRs::addFlexTable(mydoc, my_driver_FTable, bookmark = "lof_driver")
 }
 
 # LOF (direct)
 if (nrow(lof_variant_dt_table) > 0) {
-  my_driver_FTable = ReporteRs::light.table(data = as.data.frame(lof_variant_dt_table), add.rownames = FALSE)
+  my_driver_FTable = ReporteRs::FlexTable(data = as.data.frame(lof_variant_dt_table), add.rownames = FALSE,
+                                          body.par.props = body.par.props,
+                                          body.cell.props = body.cell.props,
+                                          header.par.props = header.par.props) %>%
+    setFlexTableWidths(widths = c(.8, 1.2, 1, 1, 3)) %>%
+    setFlexTableBorders(inner.vertical = borderProperties(width = 0),
+                        inner.horizontal = borderProperties(width = 0), outer.vertical = borderProperties(width = 0),
+                        outer.horizontal = borderProperties(width = 2)) %>%
+    addHeaderRow(value = c('Direct Association (Mutation in drug target)'), colspan = c(ncol(lof_variant_dt_table)), first = TRUE) %>%
+    addHeaderRow(value = c('Somatic Mutations in Pharmaceutical Target Proteins'), colspan = c(ncol(lof_variant_dt_table)),
+                 text.properties = textProperties(color = "white", font.size = 16),
+                 cell.properties = cellProperties(background.color = "#14731C"),
+                 first = TRUE)
+
   mydoc <- ReporteRs::addFlexTable(mydoc, my_driver_FTable, bookmark = "lof_variant_dt_table")
 }
 
 # LOF CiVIC (indirect)
 if (nrow(lof_civic_dt_table) > 0) {
-  my_driver_FTable = ReporteRs::light.table(data = as.data.frame(lof_civic_dt_table), add.rownames = FALSE)
+  my_driver_FTable = ReporteRs::FlexTable(data = as.data.frame(lof_civic_dt_table), add.rownames = FALSE,
+                                          body.par.props = body.par.props,
+                                          body.cell.props = body.cell.props,
+                                          header.par.props = header.par.props) %>%
+    setFlexTableWidths(widths = c(.8, 1.2, 2.5, 2.5)) %>%
+    setFlexTableBorders(inner.vertical = borderProperties(width = 0),
+                        inner.horizontal = borderProperties(width = 0), outer.vertical = borderProperties(width = 0),
+                        outer.horizontal = borderProperties(width = 2)) %>%
+    addHeaderRow(value = c('Indirect Association (other Mutations with known effect on drug)'), colspan = c(ncol(lof_civic_dt_table)), first = TRUE) %>%
+    addHeaderRow(value = c('Somatic Mutations in Pharmaceutical Target Proteins'), colspan = c(ncol(lof_civic_dt_table)),
+                 text.properties = textProperties(color = "white", font.size = 16),
+                 cell.properties = cellProperties(background.color = "#14731C"),
+                 first = TRUE)
+
   mydoc <- ReporteRs::addFlexTable(mydoc, my_driver_FTable, bookmark = "lof_civic_dt_table")
 }
 
 # CiVIC
 if (nrow(drug_variants) > 0) {
-  my_driver_FTable = ReporteRs::light.table(data = as.data.frame(drug_variants), add.rownames = FALSE)
+  my_driver_FTable = ReporteRs::FlexTable(data = as.data.frame(drug_variants), add.rownames = FALSE,
+                                          body.par.props = body.par.props,
+                                          body.cell.props = body.cell.props,
+                                          header.par.props = header.par.props) %>%
+    setFlexTableWidths(widths = c(.8, 1.2, 2, 1, 1, 1)) %>%
+    setFlexTableBorders(inner.vertical = borderProperties(width = 0),
+                        inner.horizontal = borderProperties(width = 0), outer.vertical = borderProperties(width = 0),
+                        outer.horizontal = borderProperties(width = 2)) %>%
+    addHeaderRow(value = c('Somatic Mutations with known pharmacogenetic effect'), colspan = c(ncol(drug_variants)),
+                 text.properties = textProperties(color = "white", font.size = 16),
+                 cell.properties = cellProperties(background.color = "#14731C"),
+                 first = TRUE)
+
   mydoc <- ReporteRs::addFlexTable(mydoc, my_driver_FTable, bookmark = "drug_variants")
 }
 
