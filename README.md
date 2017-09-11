@@ -24,3 +24,6 @@ Creating a report from a vcf file is currently a two-step process:
 
 2. Create a report:
 `Rscript inst/cmd/reporting.R -f inst/extdata/strelka.passed.missense.somatic.snvs_annotated.vcf`
+
+## Output
+
