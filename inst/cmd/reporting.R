@@ -8,7 +8,7 @@
 # relevant mutations found in the input vcf that can be used for
 # clinical reporting.
 
-options(warn=-1)
+options(warn=1)
 
 # parse command-line parameters
 option_list = list(
@@ -93,7 +93,7 @@ location <- tbl_df(data.frame(chr = SummarizedExperiment::seqnames(ranges), Summ
   dplyr::rename(location = names)
 fixed$ALT <- unlist(lapply(fixed$ALT, toString))
 
-# minium variant level data (MLVD) according to
+# minium variant level data (MVLD) according to
 # Ritter et al. (https://genomemedicine.biomedcentral.com/articles/10.1186/s13073-016-0367-z)
 mvld <- location %>%
   bind_cols(tbl_df(fixed)) %>%
@@ -161,6 +161,9 @@ biograph_drugs <- biograph_json %>%
   ) %>%
   mutate(hgnc_id = as.numeric(hgnc_id)) %>%
   mutate(drug_pmid = ifelse(drug_pmid == "null", NA, drug_pmid)) %>%
+  # make a row for every pubmed id
+  mutate(drug_pmid = str_split(drug_pmid, "\\|")) %>%
+  unnest(drug_pmid) %>%
   dplyr::select(-document.id, -array.index)
 
 
@@ -177,6 +180,7 @@ biograph_driver <- biograph_json %>%
     driver_pmid = jstring("pmid")
   ) %>%
   mutate(hgnc_id = as.numeric(hgnc_id)) %>%
+
   dplyr::select(-document.id, -array.index)
 
 # helper function extracting only cancer-relevant drugs
@@ -202,7 +206,7 @@ is_cancer_drug_target <- function(x) {
 
 }
 
-# prepare the tidy dataset, where all information on drugs and drivers is available for all mutations, i.e.
+# prepare a tidy dataset, where all information on drugs and drivers is available for all mutations, i.e.
 # every row is a unique combination of mutation, transcript, gene, driver status, and drug interactions.
 # In addition, we apply some standard filters to pick only high quality and LoF mutations and do some renaming.
 mvld_tidy <- mvld %>%
@@ -227,14 +231,12 @@ mvld_tidy <- mvld %>%
 #  dplyr::select(Gene, Mutation, Driver, Pathway, Process, Therapy, is_cancer_drug_target, Swissprot = SWISSPROT, meta_information.drugs)
 #### END OBSOLETE
 
-
 # driver genes with mutation (irrespective of being a drug target or not)
 lof_driver <- biograph_driver %>%
   dplyr::group_by(gene_symbol) %>%
   dplyr::summarize(Confidence = n(), References = paste(driver_pmid, collapse = "|")) %>%
   dplyr::arrange(desc(Confidence)) %>%
   dplyr::rename(Gene = gene_symbol)
-
 
 # cancer drug targets with mutation
 
@@ -255,7 +257,7 @@ lof_variant_dt_table <- biograph_drugs %>%
 # those with known pharmacogenetic effect from CiVIC on the gene level. As a result, we would list mutations in Genes with a known
 # effect due to *another* mutation (in CiVIC).
 lof_civic_dt_table <- mvld %>%
-  left_join(civic$genes, by=c("gene_symbol" = "gene")) %>%
+  left_join(civic$genes, by = c("gene_symbol" = "gene")) %>%
   filter(!is.na(drugs)) %>%
   dplyr::select(Gene = gene_symbol, Therapy = drugs, References = pubmed_ids)
 
@@ -269,8 +271,84 @@ drug_variants <- mvld %>%
   #group_by(pubmed_id) %>%
   #summarise()
   #dplyr::select(Gene, Mutation, Drugs = drugs, Disease = disease, Biomarker = evidence_type, Effect = clinical_significance, Evidence = evidence_level, Pubmed = pubmed_id) %>%
-  dplyr::select(Gene = gene_symbol, Mutation, Therapy = drugs, Disease = disease, Evidence = evidence_level, Pubmed = pubmed_id) %>%
+  dplyr::select(Gene = gene_symbol, Mutation, Therapy = drugs, Disease = disease, Evidence = evidence_level, References = pubmed_id) %>%
   arrange(Evidence)
+
+# build a reference index to the bibliography
+reference_map <- tibble(References = c(lof_driver$References, lof_variant_dt_table$References, lof_civic_dt_table$References, drug_variants$References)) %>%
+  mutate(References = str_split(References, "\\|")) %>%
+  unnest(References) %>%
+  mutate(References = str_trim(References)) %>%
+  distinct() %>%
+  tibble::rowid_to_column()
+
+base_url <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?retmode=json;db=pubmed;id="
+querystring <- URLencode(paste(base_url, paste(
+  (reference_map$References), collapse = ",", sep = ""), sep = ""))
+
+references_json <- as.tbl_json(getURL(querystring))
+
+references <- references_json  %>%
+  enter_object("result") %>%
+  gather_keys() %>%
+  spread_values(
+    first = jstring("sortfirstauthor"),
+    title = jstring("title"),
+    journal = jstring("fulljournalname"),
+    volume = jstring("volume"),
+    issue = jstring("issue"),
+    pages = jstring("pages"),
+    date = jstring("pubdate")
+  ) %>%
+  filter(row_number() != 1) %>%
+  mutate(
+    year = str_extract(date, "\\d*"),
+    authors = paste(stringr::str_extract(first, "\\w*"), "et al."),
+    citation = paste(authors, title, journal, volume, issue, year, sep = ", ")
+  ) %>%
+  left_join(reference_map, by = c("key" = "References")) %>%
+  dplyr::select(rowid, citation)
+
+# now replace pubmed ids with indexes for all the previous tables
+
+lof_driver <- lof_driver %>%
+  mutate(References = str_split(References, "\\|")) %>%
+  unnest(References) %>%
+  mutate(References = str_trim(References)) %>%
+  left_join(reference_map) %>%
+  group_by(Gene, Confidence) %>%
+  arrange(rowid, .by_group = T) %>%
+  summarise(References = paste(rowid, collapse = ",")) %>%
+  dplyr::arrange(desc(Confidence))
+
+lof_variant_dt_table <- lof_variant_dt_table %>%
+  mutate(References = str_split(References, "\\|")) %>%
+  unnest(References) %>%
+  mutate(References = str_trim(References)) %>%
+  left_join(reference_map) %>%
+  group_by(Gene, Mutation, Therapy, Confidence) %>%
+  arrange(rowid, .by_group = T) %>%
+  summarise(References = paste(rowid, collapse = ",")) %>%
+  dplyr::arrange(desc(Confidence))
+
+lof_civic_dt_table <- lof_civic_dt_table %>%
+  mutate(References = str_split(References, "\\|")) %>%
+  unnest(References) %>%
+  mutate(References = str_trim(References)) %>%
+  left_join(reference_map) %>%
+  group_by(Gene, Therapy) %>%
+  summarise(References = paste(rowid, collapse = ","))
+
+drug_variants <- drug_variants %>%
+  mutate(References = str_split(References, "\\|")) %>%
+  unnest(References) %>%
+  mutate(References = str_trim(References)) %>%
+  left_join(reference_map) %>%
+  group_by(Gene, Mutation, Therapy, Disease, Evidence) %>%
+  summarise(References = paste(rowid, collapse = ",")) %>%
+  arrange(Evidence)
+
+
 
 ###################
 #
@@ -313,7 +391,7 @@ if (nrow(lof_driver) > 0) {
 
 # LOF (direct)
 if (nrow(lof_variant_dt_table) > 0) {
-  my_driver_FTable = ReporteRs::FlexTable(data = as.data.frame(lof_variant_dt_table), add.rownames = FALSE,
+  my_variant_dt_FTable = ReporteRs::FlexTable(data = as.data.frame(lof_variant_dt_table), add.rownames = FALSE,
                                           body.par.props = body.par.props,
                                           body.cell.props = body.cell.props,
                                           header.par.props = header.par.props) %>%
@@ -329,12 +407,12 @@ if (nrow(lof_variant_dt_table) > 0) {
     spanFlexTableRows(j = c("Gene", "Mutation"), runs = lof_variant_dt_table$Gene)
 
 
-  mydoc <- ReporteRs::addFlexTable(mydoc, my_driver_FTable, bookmark = "lof_variant_dt_table")
+  mydoc <- ReporteRs::addFlexTable(mydoc, my_variant_dt_FTable, bookmark = "lof_variant_dt_table")
 }
 
 # LOF CiVIC (indirect)
 if (nrow(lof_civic_dt_table) > 0) {
-  my_driver_FTable = ReporteRs::FlexTable(data = as.data.frame(lof_civic_dt_table), add.rownames = FALSE,
+  my_civic_dt_FTable = ReporteRs::FlexTable(data = as.data.frame(lof_civic_dt_table), add.rownames = FALSE,
                                           body.par.props = body.par.props,
                                           body.cell.props = body.cell.props,
                                           header.par.props = header.par.props) %>%
@@ -348,12 +426,12 @@ if (nrow(lof_civic_dt_table) > 0) {
     #             cell.properties = cellProperties(background.color = "#14731C"),
     #             first = TRUE)
 
-  mydoc <- ReporteRs::addFlexTable(mydoc, my_driver_FTable, bookmark = "lof_civic_dt_table")
+  mydoc <- ReporteRs::addFlexTable(mydoc, my_civic_dt_FTable, bookmark = "lof_civic_dt_table")
 }
 
 # CiVIC
 if (nrow(drug_variants) > 0) {
-  my_driver_FTable = ReporteRs::FlexTable(data = as.data.frame(drug_variants), add.rownames = FALSE,
+  my_drug_variants_FTable = ReporteRs::FlexTable(data = as.data.frame(drug_variants), add.rownames = FALSE,
                                           body.par.props = body.par.props,
                                           body.cell.props = body.cell.props,
                                           header.par.props = header.par.props) %>%
@@ -367,7 +445,30 @@ if (nrow(drug_variants) > 0) {
                         outer.horizontal = borderProperties(width = 0)) %>%
     spanFlexTableRows(j = "Gene", runs = drug_variants$Gene)
 
-  mydoc <- ReporteRs::addFlexTable(mydoc, my_driver_FTable, bookmark = "drug_variants")
+  mydoc <- ReporteRs::addFlexTable(mydoc, my_drug_variants_FTable, bookmark = "drug_variants")
+}
+
+# References
+if (nrow(references) > 0) {
+  #mydoc <- ReporteRs::addPageBreak(mydoc)
+
+  my_references_FTable = ReporteRs::FlexTable(data = as.data.frame(references), add.rownames = FALSE,
+                                              body.par.props = parProperties(text.align = "left",
+                                                                             border.bottom = borderNone(),
+                                                                             border.left = borderNone()),
+                                          body.cell.props = body.cell.props,
+                                          header.par.props = header.par.props,
+                                          header.columns = F) %>%
+    addHeaderRow(value = c('References'), colspan = c(ncol(references)),
+                 text.properties = textProperties(color = "white", font.size = 16),
+                 cell.properties = cellProperties(background.color = "#3275b2"),
+                 first = TRUE) %>%
+    #setFlexTableWidths(widths = c(.8, 1.2, 2, 1, 1, 1)) %>%
+    setFlexTableBorders(inner.vertical = borderProperties(width = 0),
+                        inner.horizontal = borderProperties(width = 0), outer.vertical = borderProperties(width = 0),
+                        outer.horizontal = borderProperties(width = 0))
+
+  mydoc <- ReporteRs::addFlexTable(mydoc, my_references_FTable, bookmark = "references")
 }
 
 ReporteRs::writeDoc(mydoc, file = reportFile)
