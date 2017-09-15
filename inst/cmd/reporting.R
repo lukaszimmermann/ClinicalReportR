@@ -14,8 +14,9 @@ options(warn=1)
 option_list = list(
   optparse::make_option(c("-f", "--file"), type = "character", help = "the input file in vcf format", default = NULL),
   optparse::make_option(c("-r", "--report"), type = "character", help = "the file name for the detailed output report", default = NULL),
+  optparse::make_option(c("-t", "--template"), type = "character", help = "the file name of the report template", default = NULL),
   #optparse::make_option(c("-c", "--vepconfig"), type = "character", help = "ensembl-vep configuration file", default = NULL),
-  optparse::make_option(c("-t", "--test"), type = "logical", help = "generate test report", default = FALSE)
+  optparse::make_option(c("-x", "--test"), type = "logical", help = "generate test report", default = FALSE)
 )
 
 opt_parser <- optparse::OptionParser(option_list = option_list)
@@ -23,11 +24,16 @@ opt <- optparse::parse_args(opt_parser)
 
 # set this manually to run code interactively
 debug <- opt$test
-debug <- TRUE
+# debug <- TRUE
 
-if (!opt$test && (is.null(opt$file) || !file.exists(opt$file)) && !debug) {
+if (!debug && (is.null(opt$file) || !file.exists(opt$file))) {
   optparse::print_help(opt_parser)
-  stop("Please supply an existing input file via -f")
+  stop("Please supply a valid input file")
+}
+
+if (!debug && (is.null(opt$template) || !file.exists(opt$template))) {
+  optparse::print_help(opt_parser)
+  stop("Please supply a valid template file")
 }
 
 # make sure that all required packages are available
@@ -50,7 +56,6 @@ lapply(c(list.of.packages.cran, list.of.packages.bioconductor), library, charact
 # 2. sudo ln -f -s $(/usr/libexec/java_home)/jre/lib/server/libjvm.dylib /usr/local/lib
 # 3. install.packages("rJava", type = "source")
 
-
 vcfFile <- opt$file
 reportFile <- opt$report
 
@@ -65,6 +70,8 @@ if (debug) {
 
 if (is.null(reportFile)) {
   reportFile <- paste(tools::file_path_sans_ext(vcfFile), "docx", sep=".")
+  msg <- paste("Invalid output file or option not given. Using", reportFile)
+  print(msg)
 }
 
 
@@ -357,7 +364,7 @@ drug_variants <- drug_variants %>%
 ###################
 
 # write to docx (report)
-template_file <- system.file('extdata','template_report_en.docx',package = 'ClinicalReportR')
+template_file <- ifelse(debug, system.file('extdata','template_report_en.docx',package = 'ClinicalReportR'), opt$template)
 mydoc <- ReporteRs::docx(template = template_file)
 
 
