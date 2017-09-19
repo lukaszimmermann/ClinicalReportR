@@ -14,7 +14,7 @@ options(warn=1)
 option_list = list(
   optparse::make_option(c("-f", "--file"), type = "character", help = "the input file in vcf format", default = NULL),
   optparse::make_option(c("-r", "--report"), type = "character", help = "the file name for the detailed output report", default = NULL),
-  optparse::make_option(c("-t", "--template"), type = "character", help = "the file name of the report template", default = NULL),
+  #optparse::make_option(c("-t", "--template"), type = "character", help = "the file name of the report template", default = NULL),
   #optparse::make_option(c("-c", "--vepconfig"), type = "character", help = "ensembl-vep configuration file", default = NULL),
   optparse::make_option(c("-x", "--test"), type = "logical", help = "generate test report", default = FALSE)
 )
@@ -31,14 +31,14 @@ if (!debug && (is.null(opt$file) || !file.exists(opt$file))) {
   stop("Please supply a valid input file")
 }
 
-if (!debug && (is.null(opt$template) || !file.exists(opt$template))) {
-  optparse::print_help(opt_parser)
-  stop("Please supply a valid template file")
-}
+# if (!debug && (is.null(opt$template) || !file.exists(opt$template))) {
+#   optparse::print_help(opt_parser)
+#   stop("Please supply a valid template file")
+# }
 
 # make sure that all required packages are available
 # this tries to install missing packages that are missing
-list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "RMySQL", "ReporteRs", "optparse", "readr", "tidyjson", "RCurl")
+list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "RMySQL", "flextable", "optparse", "readr", "tidyjson", "RCurl")
 new.packages <- list.of.packages.cran[!(list.of.packages.cran %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages, repos = "http://cran.rstudio.com/")
 
@@ -87,7 +87,11 @@ civic <- ClinicalReportR::get_civic()
 #
 ###################
 
-vcf <- ClinicalReportR::check_annotation(vcfFile)
+vcf <- VariantAnnotation::readVcf(vcfFile)
+info <- rownames(VariantAnnotation::info(VariantAnnotation::header(vcf)))
+if (!("CSQ" %in% info)) {
+  stop("Please run VEP on this VCF before generating a report.")
+}
 
 header <- stringr::str_sub(VariantAnnotation::info(VariantAnnotation::header(vcf))["CSQ",3], 51)
 fields <- stringr::str_split(header, "\\|")[[1]]
@@ -173,7 +177,6 @@ biograph_drugs <- biograph_json %>%
   unnest(drug_pmid) %>%
   dplyr::select(-document.id, -array.index)
 
-
 biograph_driver <- biograph_json %>%
   enter_object("_items") %>% gather_array() %>%
   spread_values(
@@ -202,17 +205,6 @@ extract_cancer_drugs <- function(x) {
   paste(unique(y$drug_name), collapse = ",")
 }
 
-# helper function to filter for drug targets.
-#' @return TRUE if a gene x is of interaction_type 'target' for at least one cancer drug
-is_cancer_drug_target <- function(x) {
-  if (is.null(x)) {
-    return(FALSE)
-  }
-
-  return(any(x$interaction_type == "target"))
-
-}
-
 # prepare a tidy dataset, where all information on drugs and drivers is available for all mutations, i.e.
 # every row is a unique combination of mutation, transcript, gene, driver status, and drug interactions.
 # In addition, we apply some standard filters to pick only high quality and LoF mutations and do some renaming.
@@ -220,23 +212,6 @@ mvld_tidy <- mvld %>%
   left_join(biograph_genes) %>%
   left_join(biograph_driver) %>%
   left_join(biograph_drugs)
-
-
-## OBSOLETE?
-# can this be done with 'replace'?
-#mvld$meta_information.drugs <- lapply(mvld$meta_information.drugs, function(x) { if(is.null(x)) return(data.frame()) else return(x) })
-#mvld$meta_information.driver_information <- lapply(mvld$meta_information.driver_information, function(x) { if(is.null(x)) return(data.frame()) else return(x) })
-
-#mvld <- mvld %>%
-  # extract and aggregate some information
-#  mutate(Driver = lapply(meta_information.driver_information, function(x) {  paste(unique(x$driver_type), sep = "\n", collapse = "\n") }),
-#         Pathway = lapply(meta_information.driver_information, function(x) {  ifelse(is.null(x$core_pathway), "", x$core_pathway) }),
-#         Process = lapply(meta_information.driver_information, function(x) {  ifelse(is.null(x$Process), "", x$Process) }),
-#         is_cancer_drug_target = unlist(lapply(meta_information.drugs, is_cancer_drug_target)),
-#         Therapy = lapply(meta_information.drugs, extract_cancer_drugs)
-#  ) %>%
-#  dplyr::select(Gene, Mutation, Driver, Pathway, Process, Therapy, is_cancer_drug_target, Swissprot = SWISSPROT, meta_information.drugs)
-#### END OBSOLETE
 
 # driver genes with mutation (irrespective of being a drug target or not)
 lof_driver <- biograph_driver %>%
@@ -364,118 +339,86 @@ drug_variants <- drug_variants %>%
 ###################
 
 # write to docx (report)
-template_file <- ifelse(debug, system.file('extdata','template_report_en.docx',package = 'ClinicalReportR'), opt$template)
-mydoc <- ReporteRs::docx(template = template_file)
-
+# template_file <- ifelse(debug, system.file('extdata','template_report_en.docx',package = 'ClinicalReportR'), opt$template)
+mydoc <- officer::read_docx()
+#styles_info(mydoc)
 
 # Some default props
-body.par.props = parProperties(text.align = "center",
-                               border.bottom = borderNone(),
-                               border.left = borderNone())
-body.cell.props = cellProperties(padding = 3)
-header.par.props = parProperties(text.align = "center")
 
-options('ReporteRs-default-font' = "Verdana")
+header_props <- fp_text(font.size = 20, bold = T, color = 'white', shading.color = "orange")
+
+# body.par.props = parProperties(text.align = "center",
+#                                border.bottom = borderNone(),
+#                                border.left = borderNone())
+# body.cell.props = cellProperties(padding = 3)
+# header.par.props = parProperties(text.align = "center")
+#
+# options('ReporteRs-default-font' = "Verdana")
 
 # DRIVER
 if (nrow(lof_driver) > 0) {
-  my_driver_FTable = ReporteRs::FlexTable(data = as.data.frame(lof_driver), add.rownames = FALSE,
-                                          body.par.props = body.par.props,
-                                          body.cell.props = body.cell.props,
-                                          header.par.props = header.par.props) %>%
-    addHeaderRow(value = c('Somatic Mutations in Known Driver Genes'), colspan = c(ncol(lof_driver)),
-                 text.properties = textProperties(color = "white", font.size = 16),
-                 cell.properties = cellProperties(background.color = "#F79646"),
-                 first = TRUE) %>%
-    setFlexTableWidths(widths = c(.8, 1.2, 5)) %>%
-    setFlexTableBorders(inner.vertical = borderProperties(width = 0),
-                        inner.horizontal = borderProperties(width = 0), outer.vertical = borderProperties(width = 0),
-                        outer.horizontal = borderProperties(width = 0))
 
+  my_driver_FTable = flextable::flextable(data = as.data.frame(lof_driver)) %>%
+    theme_vanilla() %>%
+    align(align = "center", part = "all") %>%
+    autofit()
 
-  mydoc <- ReporteRs::addFlexTable(mydoc, my_driver_FTable, bookmark = "lof_driver")
+  mydoc <- mydoc %>%
+    body_add_fpar(fpar(ftext("Somatic Mutations in Known Driver Genes", prop = header_props))) %>%
+    body_add_flextable(value = my_driver_FTable)
+
 }
 
 # LOF (direct)
 if (nrow(lof_variant_dt_table) > 0) {
-  my_variant_dt_FTable = ReporteRs::FlexTable(data = as.data.frame(lof_variant_dt_table), add.rownames = FALSE,
-                                          body.par.props = body.par.props,
-                                          body.cell.props = body.cell.props,
-                                          header.par.props = header.par.props) %>%
-    addHeaderRow(value = c('Direct Association (Mutation in drug target)'), colspan = c(ncol(lof_variant_dt_table)), first = TRUE) %>%
-    addHeaderRow(value = c('Somatic Mutations in Pharmaceutical Target Proteins'), colspan = c(ncol(lof_variant_dt_table)),
-                 text.properties = textProperties(color = "white", font.size = 16),
-                 cell.properties = cellProperties(background.color = "#14731C"),
-                 first = TRUE) %>%
-    setFlexTableWidths(widths = c(.8, 1.1, 1.1, 1, 3)) %>%
-    setFlexTableBorders(inner.vertical = borderProperties(width = 0),
-                        inner.horizontal = borderProperties(width = 0), outer.vertical = borderProperties(width = 0),
-                        outer.horizontal = borderProperties(width = 0)) %>%
-    spanFlexTableRows(j = c("Gene", "Mutation"), runs = lof_variant_dt_table$Gene)
+  my_variant_dt_FTable <- flextable::flextable(data = as.data.frame(lof_variant_dt_table)) %>%
+    theme_vanilla() %>%
+    align(align = "center", part = "all") %>%
+    autofit()
 
-
-  mydoc <- ReporteRs::addFlexTable(mydoc, my_variant_dt_FTable, bookmark = "lof_variant_dt_table")
+  mydoc <- mydoc %>%
+    body_add_fpar(fpar(ftext("Somatic Mutations in Pharmaceutical Target Proteins", prop = header_props))) %>%
+    body_add_fpar(fpar(ftext("Direct Association (Mutation in drug target)", prop = header_props))) %>%
+    body_add_flextable(value = my_variant_dt_FTable)
 }
 
 # LOF CiVIC (indirect)
 if (nrow(lof_civic_dt_table) > 0) {
-  my_civic_dt_FTable = ReporteRs::FlexTable(data = as.data.frame(lof_civic_dt_table), add.rownames = FALSE,
-                                          body.par.props = body.par.props,
-                                          body.cell.props = body.cell.props,
-                                          header.par.props = header.par.props) %>%
-    addHeaderRow(value = c('Indirect Association (other Mutations with known effect on drug)'), colspan = c(ncol(lof_civic_dt_table)), first = TRUE) %>%
-    setFlexTableWidths(widths = c(.8, 1.5, 3.7)) %>%
-    setFlexTableBorders(inner.vertical = borderProperties(width = 0),
-                        inner.horizontal = borderProperties(width = 0), outer.vertical = borderProperties(width = 0),
-                        outer.horizontal = borderProperties(width = 0))
-    #addHeaderRow(value = c('Somatic Mutations in Pharmaceutical Target Proteins'), colspan = c(ncol(lof_civic_dt_table)),
-    #             text.properties = textProperties(color = "white", font.size = 16),
-    #             cell.properties = cellProperties(background.color = "#14731C"),
-    #             first = TRUE)
+  my_civic_dt_FTable = flextable::flextable(data = as.data.frame(lof_civic_dt_table)) %>%
+    theme_vanilla() %>%
+    align(align = "center", part = "all") %>%
+    autofit()
 
-  mydoc <- ReporteRs::addFlexTable(mydoc, my_civic_dt_FTable, bookmark = "lof_civic_dt_table")
+  mydoc <- mydoc %>%
+    body_add_fpar(fpar(ftext("Indirect Association (other Mutations with known effect on drug)", prop = header_props))) %>%
+    body_add_flextable(value = my_civic_dt_FTable)
 }
 
 # CiVIC
 if (nrow(drug_variants) > 0) {
-  my_drug_variants_FTable = ReporteRs::FlexTable(data = as.data.frame(drug_variants), add.rownames = FALSE,
-                                          body.par.props = body.par.props,
-                                          body.cell.props = body.cell.props,
-                                          header.par.props = header.par.props) %>%
-    addHeaderRow(value = c('Somatic Mutations with known pharmacogenetic effect'), colspan = c(ncol(drug_variants)),
-                 text.properties = textProperties(color = "white", font.size = 16),
-                 cell.properties = cellProperties(background.color = "#C0504D"),
-                 first = TRUE) %>%
-    setFlexTableWidths(widths = c(.8, 1.2, 2, 1, 1, 1)) %>%
-    setFlexTableBorders(inner.vertical = borderProperties(width = 0),
-                        inner.horizontal = borderProperties(width = 0), outer.vertical = borderProperties(width = 0),
-                        outer.horizontal = borderProperties(width = 0)) %>%
-    spanFlexTableRows(j = "Gene", runs = drug_variants$Gene)
+  my_drug_variants_FTable = flextable::flextable(data = as.data.frame(drug_variants)) %>%
+    theme_vanilla() %>%
+    align(align = "center", part = "all")
 
-  mydoc <- ReporteRs::addFlexTable(mydoc, my_drug_variants_FTable, bookmark = "drug_variants")
+  mydoc <- mydoc %>%
+    body_add_fpar(fpar(ftext('Somatic Mutations with known pharmacogenetic effect', prop = header_props))) %>%
+    body_add_flextable(my_drug_variants_FTable)
 }
 
 # References
 if (nrow(references) > 0) {
   #mydoc <- ReporteRs::addPageBreak(mydoc)
 
-  my_references_FTable = ReporteRs::FlexTable(data = as.data.frame(references), add.rownames = FALSE,
-                                              body.par.props = parProperties(text.align = "left",
-                                                                             border.bottom = borderNone(),
-                                                                             border.left = borderNone()),
-                                          body.cell.props = body.cell.props,
-                                          header.par.props = header.par.props,
-                                          header.columns = F) %>%
-    addHeaderRow(value = c('References'), colspan = c(ncol(references)),
-                 text.properties = textProperties(color = "white", font.size = 16),
-                 cell.properties = cellProperties(background.color = "#3275b2"),
-                 first = TRUE) %>%
-    #setFlexTableWidths(widths = c(.8, 1.2, 2, 1, 1, 1)) %>%
-    setFlexTableBorders(inner.vertical = borderProperties(width = 0),
-                        inner.horizontal = borderProperties(width = 0), outer.vertical = borderProperties(width = 0),
-                        outer.horizontal = borderProperties(width = 0))
+  my_references_FTable = flextable::flextable(data = as.data.frame(references)) %>%
+    theme_vanilla() %>%
+    fontsize(9) %>%
+    border() %>%
+    align(align = "left", part = "body")
 
-  mydoc <- ReporteRs::addFlexTable(mydoc, my_references_FTable, bookmark = "references")
+  mydoc <- mydoc %>%
+    body_add_fpar(fpar(ftext('References', prop = header_props))) %>%
+    body_add_flextable(my_references_FTable)
 }
 
-ReporteRs::writeDoc(mydoc, file = reportFile)
+print(mydoc, target = reportFile)
+# ReporteRs::writeDoc(mydoc, file = reportFile)
