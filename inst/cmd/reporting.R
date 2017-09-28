@@ -24,7 +24,7 @@ opt <- optparse::parse_args(opt_parser)
 
 # set this manually to run code interactively
 debug <- opt$test
-# debug <- TRUE
+debug <- TRUE
 
 if (!debug && (is.null(opt$file) || !file.exists(opt$file))) {
   optparse::print_help(opt_parser)
@@ -38,7 +38,7 @@ if (!debug && (is.null(opt$file) || !file.exists(opt$file))) {
 
 # make sure that all required packages are available
 # this tries to install missing packages that are missing
-list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "RMySQL", "flextable", "optparse", "readr", "tidyjson", "RCurl")
+list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "flextable", "optparse", "readr", "tidyjson", "RCurl")
 new.packages <- list.of.packages.cran[!(list.of.packages.cran %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages, repos = "http://cran.rstudio.com/")
 
@@ -62,7 +62,7 @@ reportFile <- opt$report
 if (debug) {
   # for testing
   vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs_annotated.vcf"
-  #vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs_short.vcf"
+  #vcfFile <- "inst/extdata/strelka.passed.nonsense.somatic.snvs.vcf.out.vcf"
 
   # test without annotation
   #vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs.vcf"
@@ -79,7 +79,13 @@ if (is.null(reportFile)) {
 # update CiVIC data
 ###################
 
-civic <- ClinicalReportR::get_civic()
+# Collects the most recent data from CiVIC and returns a list with two data frames for genes and evidence.
+
+  civic_evidence <- read.table(civic_source, sep="\t", header=T, fill = T, quote = "\"", comment.char = "%") %>%
+    dplyr::rename(chr=chromosome, alt=variant_bases, ref=reference_bases) %>%
+    filter(evidence_status == "accepted") %>%
+    filter(variant_origin == "Somatic Mutation") %>%
+    filter(evidence_type == "Predictive" & evidence_direction == "Supports")
 
 ###################
 #
@@ -114,23 +120,20 @@ mvld <- location %>%
   dplyr::select(chr, start, stop = end, width, location, ref = REF, alt = ALT, qual = QUAL, filter = FILTER, CSQ) %>%
   tidyr::unnest(CSQ) %>%
   tidyr::separate("CSQ", fields, sep = "\\|") %>%
-  #dplyr::left_join(civic$evidence) %>%
   mutate(Consequence = stringr::str_replace_all(stringr::str_extract(Consequence, "^(?:(?!_variant)\\w)*"), "_", " "),
-         reference_build = "GRCh37",
+  #       reference_build = "GRCh37",
          hgnc_id = as.integer(HGNC_ID),
          dbSNP = as.character(stringr::str_extract_all(Existing_variation, "rs\\w+")),
          COSMIC = as.character(stringr::str_extract_all(Existing_variation, "COSM\\w+")),
          DNA = stringr::str_extract(HGVSc, "(?<=:).*"),
          Protein = stringr::str_extract(HGVSp, "(?<=:).*")) %>% # positive lookbehind
   dplyr::select(-Gene, -HGNC_ID) %>%       # drop Ensembl Gene ID as we're using HUGO from here on
-  dplyr::rename(gene_symbol = SYMBOL, Type = VARIANT_CLASS, Mutation = Protein) %>%
+  dplyr::rename(gene_symbol = SYMBOL, Type = VARIANT_CLASS) %>%
+  dplyr::mutate(Mutation = ifelse(Consequence == "stop gained", Consequence, Protein)) %>%
   filter(filter == "PASS") %>% # filter quality
   filter(PICK == 1) %>% # filter only transcripts that VEP picked
   filter(BIOTYPE == "protein_coding" & Consequence != "synonymous_variant" & Consequence != "intron_variant") %>%
   filter(LoF != "" | startsWith(SIFT, "deleterious") | endsWith(PolyPhen, "damaging"))
-
-  #tidyr::unite_("Mutation", c("Type", "DNA", "Protein", "Consequence"), sep="\n")
-
 
 # now query our noSQL database for information on drugs and driver status for all genes occuring in the
 # mvld. Then create a relational schema for each with hgnc_id as our 'key', resulting in 3 tables, one each for genes, drivers, and drugs.
@@ -149,7 +152,7 @@ biograph_genes <- biograph_json %>%
     hgnc_id = jstring("hgnc_id"),
     driver_score = jnumber("driver_score")
   ) %>%
-  mutate(hgnc_id = as.numeric(hgnc_id)) %>%
+  mutate(hgnc_id = as.integer(hgnc_id)) %>%
   mutate(driver_score = ifelse(is.na(driver_score), 0, driver_score)) %>%
   dplyr::select(gene_symbol, hgnc_id, status, driver_score)
 
@@ -170,7 +173,7 @@ biograph_drugs <- biograph_json %>%
     interaction_type = jstring("interaction_type"),
     is_cancer_drug = jlogical("is_cancer_drug")
   ) %>%
-  mutate(hgnc_id = as.numeric(hgnc_id)) %>%
+  mutate(hgnc_id = as.integer(hgnc_id)) %>%
   mutate(drug_pmid = ifelse(drug_pmid == "null", NA, drug_pmid)) %>%
   # make a row for every pubmed id
   mutate(drug_pmid = str_split(drug_pmid, "\\|")) %>%
@@ -189,34 +192,22 @@ biograph_driver <- biograph_json %>%
     driver_source_name = jstring("source_name"),
     driver_pmid = jstring("pmid")
   ) %>%
-  mutate(hgnc_id = as.numeric(hgnc_id)) %>%
-
-  dplyr::select(-document.id, -array.index)
-
-# helper function extracting only cancer-relevant drugs
-extract_cancer_drugs <- function(x) {
-  if (is.null(x)) {
-    return("")
-  }
-  y <- tbl_df(x) %>%
-    dplyr::filter(base::grepl("^L.*", ATC_code)) %>%
-    dplyr::filter(!is.na(drug_name)) %>%
-    dplyr::mutate(drug_name = tolower(drug_name))
-  paste(unique(y$drug_name), collapse = ",")
-}
+  mutate(hgnc_id = as.integer(hgnc_id)) %>%
+  left_join(mvld) %>%
+  dplyr::select(gene_symbol, Mutation, driver_pmid)
 
 # prepare a tidy dataset, where all information on drugs and drivers is available for all mutations, i.e.
 # every row is a unique combination of mutation, transcript, gene, driver status, and drug interactions.
 # In addition, we apply some standard filters to pick only high quality and LoF mutations and do some renaming.
-mvld_tidy <- mvld %>%
-  left_join(biograph_genes) %>%
-  left_join(biograph_driver) %>%
-  left_join(biograph_drugs)
+# mvld_tidy <- mvld %>%
+#   left_join(biograph_genes) %>%
+#   left_join(biograph_driver) %>%
+#   left_join(biograph_drugs)
 
 # driver genes with mutation (irrespective of being a drug target or not)
 lof_driver <- biograph_driver %>%
   dplyr::group_by(gene_symbol) %>%
-  dplyr::summarize(Confidence = n(), References = paste(driver_pmid, collapse = "|")) %>%
+  dplyr::summarize(Mutation = unique(Mutation), Confidence = n(), References = paste(driver_pmid, collapse = "|")) %>%
   dplyr::arrange(desc(Confidence)) %>%
   dplyr::rename(Gene = gene_symbol)
 
@@ -234,26 +225,24 @@ lof_variant_dt_table <- biograph_drugs %>%
   dplyr::arrange(desc(Confidence))
 
 # indirect associations:
-# mutation in *any* gene (not necessarily drug target) with known effect on drug.
-# Here we list all genes with a LoF mutation associated with enzymes, transporters, or carriers as defined by DrugBank and
-# those with known pharmacogenetic effect from CiVIC on the gene level. As a result, we would list mutations in Genes with a known
-# effect due to *another* mutation (in CiVIC).
+# other mutations in *any* gene (not necessarily drug target) with known effect on drug.
+# Here we list all genes with any LoF mutation (not necessarily the same mutation that occured in the sample) with evidence
+# that the affected patient could show a resistance to a drug. Note that lof_civic_dt_table is a superset
+# of drug_variants below.
 lof_civic_dt_table <- mvld %>%
-  left_join(civic$genes, by = c("gene_symbol" = "gene")) %>%
-  filter(!is.na(drugs)) %>%
-  dplyr::select(Gene = gene_symbol, Therapy = drugs, References = pubmed_ids)
+  inner_join(civic_evidence, by = c("gene_symbol" = "gene")) %>%
+  dplyr::select(Gene = gene_symbol, Mutation = variant, Therapy = drugs, Disease = disease, Effect = clinical_significance, Evidence = evidence_level, References = pubmed_id)
 
 # mutation-specific annotations (from civic)
 # These are mutations reported by CiVIC with a known pharmacogenetic effect, clinical significance, and evidence level.
+# Note that these variants have to match with the sample variants in their exact position on the genome.
 drug_variants <- mvld %>%
-  inner_join(civic$evidence) %>%
-  mutate(drugs = as.character(drugs)) %>%
-  filter(stringr::str_length(stringr::str_trim((drugs))) > 0) %>%
-  filter(variant_origin == "Somatic Mutation") %>%
-  #group_by(pubmed_id) %>%
-  #summarise()
-  #dplyr::select(Gene, Mutation, Drugs = drugs, Disease = disease, Biomarker = evidence_type, Effect = clinical_significance, Evidence = evidence_level, Pubmed = pubmed_id) %>%
-  dplyr::select(Gene = gene_symbol, Mutation, Therapy = drugs, Disease = disease, Evidence = evidence_level, References = pubmed_id) %>%
+  inner_join(civic_evidence, by = c("gene_symbol" = "gene", "chr", "start", "stop", "ref", "alt")) %>%
+  dplyr::select(Gene = gene_symbol, Mutation = variant, Therapy = drugs, Disease = disease, Effect = clinical_significance, Evidence = evidence_level, References = pubmed_id) %>%
+  arrange(Evidence)
+
+# Now remove drug_variants that are also contained in lof_civic_dt_table
+lof_civic_dt_table <- setdiff(lof_civic_dt_table, drug_variants) %>%
   arrange(Evidence)
 
 # build a reference index to the bibliography
@@ -272,7 +261,7 @@ references_json <- as.tbl_json(getURL(querystring))
 
 references <- references_json  %>%
   enter_object("result") %>%
-  gather_keys() %>%
+  gather_object() %>%
   spread_values(
     first = jstring("sortfirstauthor"),
     title = jstring("title"),
@@ -288,49 +277,55 @@ references <- references_json  %>%
     authors = paste(stringr::str_extract(first, "\\w*"), "et al."),
     citation = paste(authors, title, journal, volume, issue, year, sep = ", ")
   ) %>%
-  left_join(reference_map, by = c("key" = "References")) %>%
+  left_join(reference_map, by = c("name" = "References")) %>%
   dplyr::select(rowid, citation)
 
 # now replace pubmed ids with indexes for all the previous tables
 
-lof_driver <- lof_driver %>%
-  mutate(References = str_split(References, "\\|")) %>%
-  unnest(References) %>%
-  mutate(References = str_trim(References)) %>%
-  left_join(reference_map) %>%
-  group_by(Gene, Confidence) %>%
-  arrange(rowid, .by_group = T) %>%
-  summarise(References = paste(rowid, collapse = ",")) %>%
-  dplyr::arrange(desc(Confidence))
+if (nrow(lof_driver)) {
+  lof_driver <- lof_driver %>%
+    mutate(References = str_split(References, "\\|")) %>%
+    unnest(References) %>%
+    mutate(References = str_trim(References)) %>%
+    left_join(reference_map) %>%
+    group_by(Gene, Mutation, Confidence) %>%
+    arrange(rowid, .by_group = T) %>%
+    summarise(References = paste(rowid, collapse = ",")) %>%
+    dplyr::arrange(desc(Confidence))
+}
 
-lof_variant_dt_table <- lof_variant_dt_table %>%
-  mutate(References = str_split(References, "\\|")) %>%
-  unnest(References) %>%
-  mutate(References = str_trim(References)) %>%
-  left_join(reference_map) %>%
-  group_by(Gene, Mutation, Therapy, Confidence) %>%
-  arrange(rowid, .by_group = T) %>%
-  summarise(References = paste(rowid, collapse = ",")) %>%
-  dplyr::arrange(desc(Confidence))
+if (nrow(lof_variant_dt_table)) {
+  lof_variant_dt_table <- lof_variant_dt_table %>%
+    mutate(References = str_split(References, "\\|")) %>%
+    unnest(References) %>%
+    mutate(References = str_trim(References)) %>%
+    left_join(reference_map) %>%
+    group_by(Gene, Mutation, Therapy, Confidence) %>%
+    arrange(rowid, .by_group = T) %>%
+    summarise(References = paste(rowid, collapse = ",")) %>%
+    dplyr::arrange(desc(Confidence))
+}
 
-lof_civic_dt_table <- lof_civic_dt_table %>%
-  mutate(References = str_split(References, "\\|")) %>%
-  unnest(References) %>%
-  mutate(References = str_trim(References)) %>%
-  left_join(reference_map) %>%
-  group_by(Gene, Therapy) %>%
-  summarise(References = paste(rowid, collapse = ","))
+if (nrow(lof_civic_dt_table)) {
+  lof_civic_dt_table <- lof_civic_dt_table %>%
+    mutate(References = str_split(References, "\\|")) %>%
+    unnest(References) %>%
+    mutate(References = str_trim(References)) %>%
+    left_join(reference_map) %>%
+    group_by(Gene, Mutation, Therapy, Disease, Evidence) %>%
+    summarise(References = paste(rowid, collapse = ","))
+}
 
-drug_variants <- drug_variants %>%
-  mutate(References = str_split(References, "\\|")) %>%
-  unnest(References) %>%
-  mutate(References = str_trim(References)) %>%
-  left_join(reference_map) %>%
-  group_by(Gene, Mutation, Therapy, Disease, Evidence) %>%
-  summarise(References = paste(rowid, collapse = ",")) %>%
-  arrange(Evidence)
-
-
+if (nrow(drug_variants)) {
+  drug_variants <- drug_variants %>%
+    mutate(References = str_split(References, "\\|")) %>%
+    unnest(References) %>%
+    mutate(References = str_trim(References)) %>%
+    left_join(reference_map) %>%
+    group_by(Gene, Mutation, Therapy, Disease, Evidence) %>%
+    summarise(References = paste(rowid, collapse = ",")) %>%
+    arrange(Evidence)
+}
 
 ###################
 #
@@ -341,19 +336,10 @@ drug_variants <- drug_variants %>%
 # write to docx (report)
 # template_file <- ifelse(debug, system.file('extdata','template_report_en.docx',package = 'ClinicalReportR'), opt$template)
 mydoc <- officer::read_docx()
-#styles_info(mydoc)
 
-# Some default props
-
-header_props <- fp_text(font.size = 20, bold = T, color = 'white', shading.color = "orange")
-
-# body.par.props = parProperties(text.align = "center",
-#                                border.bottom = borderNone(),
-#                                border.left = borderNone())
-# body.cell.props = cellProperties(padding = 3)
-# header.par.props = parProperties(text.align = "center")
-#
-# options('ReporteRs-default-font' = "Verdana")
+# Default properties
+# header_props <- fp_text(font.size = 20, bold = T, color = 'white', shading.color = "orange", font.family = "Verdana")
+# header_par_props <- fp_par(text.align = "center")
 
 # DRIVER
 if (nrow(lof_driver) > 0) {
@@ -364,9 +350,9 @@ if (nrow(lof_driver) > 0) {
     autofit()
 
   mydoc <- mydoc %>%
-    body_add_fpar(fpar(ftext("Somatic Mutations in Known Driver Genes", prop = header_props))) %>%
+    body_add_par('Somatic Mutations in Known Driver Genes', style = 'heading 1') %>%
+    # body_add_fpar(fpar(ftext("Somatic Mutations in Known Driver Genes"), style = "heading 1")) %>%
     body_add_flextable(value = my_driver_FTable)
-
 }
 
 # LOF (direct)
@@ -377,8 +363,10 @@ if (nrow(lof_variant_dt_table) > 0) {
     autofit()
 
   mydoc <- mydoc %>%
-    body_add_fpar(fpar(ftext("Somatic Mutations in Pharmaceutical Target Proteins", prop = header_props))) %>%
-    body_add_fpar(fpar(ftext("Direct Association (Mutation in drug target)", prop = header_props))) %>%
+    body_add_par('Somatic Mutations in Pharmaceutical Target Proteins', style = 'heading 1') %>%
+    body_add_par('Direct Association (Mutation in drug target)', style = 'heading 2') %>%
+    # body_add_fpar(fpar(ftext("Somatic Mutations in Pharmaceutical Target Proteins", prop = header_props))) %>%
+    # body_add_fpar(fpar(ftext("Direct Association (Mutation in drug target)", prop = header_props))) %>%
     body_add_flextable(value = my_variant_dt_FTable)
 }
 
@@ -390,7 +378,8 @@ if (nrow(lof_civic_dt_table) > 0) {
     autofit()
 
   mydoc <- mydoc %>%
-    body_add_fpar(fpar(ftext("Indirect Association (other Mutations with known effect on drug)", prop = header_props))) %>%
+    body_add_par('Indirect Association (other Mutations with known effect on drug)', style = 'heading 2') %>%
+    # body_add_fpar(fpar(ftext("Indirect Association (other Mutations with known effect on drug)", prop = header_props))) %>%
     body_add_flextable(value = my_civic_dt_FTable)
 }
 
@@ -401,7 +390,8 @@ if (nrow(drug_variants) > 0) {
     align(align = "center", part = "all")
 
   mydoc <- mydoc %>%
-    body_add_fpar(fpar(ftext('Somatic Mutations with known pharmacogenetic effect', prop = header_props))) %>%
+    body_add_par('Somatic Mutations with known pharmacogenetic effect', style = 'heading 1') %>%
+    # body_add_fpar(fpar(ftext('Somatic Mutations with known pharmacogenetic effect', prop = header_props)), style="centered") %>%
     body_add_flextable(my_drug_variants_FTable)
 }
 
@@ -409,15 +399,33 @@ if (nrow(drug_variants) > 0) {
 if (nrow(references) > 0) {
   #mydoc <- ReporteRs::addPageBreak(mydoc)
 
-  my_references_FTable = flextable::flextable(data = as.data.frame(references)) %>%
+  my_references_FTable <- flextable::flextable(data = as.data.frame(references)) %>%
     theme_vanilla() %>%
-    fontsize(9) %>%
-    border() %>%
-    align(align = "left", part = "body")
+#    fontsize(9) %>%
+    # border() %>%
+    align(align = "left", part = "all") %>%
+    width("rowid", 0.5) %>%
+    width("citation", 6)
 
   mydoc <- mydoc %>%
-    body_add_fpar(fpar(ftext('References', prop = header_props))) %>%
+    body_add_par('References', style = 'heading 1') %>%
+    # body_add_fpar(fpar(ftext('References', prop = header_props)), style = "centered") %>%
     body_add_flextable(my_references_FTable)
+}
+
+if (nrow(mvld) > 0) {
+  appendix <- mvld %>%
+    dplyr::select(Gene = gene_symbol, Mutation, dbSNP, COSMIC)
+
+  my_appendix_FTable = flextable::flextable(data = as.data.frame(appendix)) %>%
+    theme_vanilla() %>%
+    align(align = "center", part = "all") %>%
+    autofit()
+
+  mydoc <- mydoc %>%
+    body_add_par('Appendix', style = 'heading 1') %>%
+    # body_add_fpar(fpar(ftext("Appendix", prop = header_props))) %>%
+    body_add_flextable(value = my_appendix_FTable)
 }
 
 print(mydoc, target = reportFile)
