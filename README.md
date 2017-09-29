@@ -1,29 +1,25 @@
 # Clinical Reporting in R
 
 This is a prototype implementation of a clinical reporting pipeline in R.
-Currently, it creates a genetic report of somatic mutations from a vcf file annotated via https://github.com/PersonalizedOncology/vep_plugins_containerized.
-You can find an example report and corresponding template in inst/extdata.
+Currently, it creates a genetic report of somatic mutations from a vcf file annotated via [Ensembl Variant Effect Predictor](https://github.com/Ensembl/ensembl-vep). You can find an example report in data/.
 
-## Prerequisites
-A running REST service for the Biograph data. This is currently under development.
+## Requirements
+The reporting script relies on a running REST service for the Biograph data. This is currently under development.
+
 
 ## Installation
-Simply install this R package
-
-1. from an R session: `devtools::install_github("PersonalizedOncology/ClinicalReportR", dependencies = TRUE)`
-
-or use the docker container.
+Clone this repository and run the `reporting.R` script and provide a valid vcf file or use the docker container.
 
 ## Usage
 
-Creating a report from a vcf file is currently a two-step process:
+Creating a report from a vcf file is currently a multi-step process:
 
-1. Annotate your vcf via [Ensembl Variant Effect Predictor](https://hub.docker.com/r/personalizedoncology/vep_plugins_containerized/) __using the vep_docker.ini file included in this package__:
-`docker run --rm -v /absolute/path/to/vcf:/data personalizedoncology/vep_plugins_containerized vep.pl --config /data/vep_docker.ini -i /data/strelka.passed.missense.somatic.snvs.vcf -o /data/strelka.passed.missense.somatic.snvs_annotated.vcf --vcf
+1. Annotate your vcf via [Ensembl Variant Effect Predictor](https://github.com/Ensembl/ensembl-vep) __using the vep_docker.ini file included in this package__:
+`docker run --rm -v /absolute/path/to/vcf:/data ensemblorg/ensembl-vep:latest vep --config /data/vep_docker.ini -i /data/strelka.passed.missense.somatic.snvs.vcf -o /data/strelka.passed.missense.somatic.snvs_annotated.vcf
 `
 
 2. Create a report:
-`Rscript inst/cmd/reporting.R -f inst/extdata/strelka.passed.missense.somatic.snvs_annotated.vcf`
+`Rscript reporting.R -f /absolute/path/to/strelka.passed.missense.somatic.snvs_annotated.vcf`
 
-## Output
+This will create a file `/absolute/path/to/strelka.passed.missense.somatic.snvs_annotated.vcf.docx` with the report.
 

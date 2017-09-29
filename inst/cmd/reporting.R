@@ -13,18 +13,19 @@ options(warn=1)
 # parse command-line parameters
 option_list = list(
   optparse::make_option(c("-f", "--file"), type = "character", help = "the input file in vcf format", default = NULL),
-  optparse::make_option(c("-r", "--report"), type = "character", help = "the file name for the detailed output report", default = NULL),
+  optparse::make_option(c("-r", "--report"), type = "character", help = "the file name for the detailed output report", default = NULL)
   #optparse::make_option(c("-t", "--template"), type = "character", help = "the file name of the report template", default = NULL),
   #optparse::make_option(c("-c", "--vepconfig"), type = "character", help = "ensembl-vep configuration file", default = NULL),
-  optparse::make_option(c("-x", "--test"), type = "logical", help = "generate test report", default = FALSE)
+  #optparse::make_option(c("-x", "--test"), type = "logical", help = "generate test report", default = FALSE)
 )
 
 opt_parser <- optparse::OptionParser(option_list = option_list)
 opt <- optparse::parse_args(opt_parser)
 
 # set this manually to run code interactively
-debug <- opt$test
-debug <- TRUE
+#debug <- opt$test
+#debug <- TRUE
+debug <- FALSE
 
 if (!debug && (is.null(opt$file) || !file.exists(opt$file))) {
   optparse::print_help(opt_parser)
@@ -61,8 +62,9 @@ reportFile <- opt$report
 
 if (debug) {
   # for testing
-  vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs_annotated.vcf"
+  #vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs_annotated.vcf"
   #vcfFile <- "inst/extdata/strelka.passed.nonsense.somatic.snvs.vcf.out.vcf"
+  vcfFile <- "inst/extdata/test.vcf"
 
   # test without annotation
   #vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs.vcf"
@@ -80,12 +82,16 @@ if (is.null(reportFile)) {
 ###################
 
 # Collects the most recent data from CiVIC and returns a list with two data frames for genes and evidence.
+civic_source = "https://civic.genome.wustl.edu/downloads/nightly/nightly-ClinicalEvidenceSummaries.tsv"
+if (debug) {
+  civic_source = "inst/extdata/nightly-ClinicalEvidenceSummaries.tsv"
+}
 
-  civic_evidence <- read.table(civic_source, sep="\t", header=T, fill = T, quote = "\"", comment.char = "%") %>%
-    dplyr::rename(chr=chromosome, alt=variant_bases, ref=reference_bases) %>%
-    filter(evidence_status == "accepted") %>%
-    filter(variant_origin == "Somatic Mutation") %>%
-    filter(evidence_type == "Predictive" & evidence_direction == "Supports")
+civic_evidence <- read.table(civic_source, sep="\t", header=T, fill = T, quote = "\"", comment.char = "%") %>%
+  dplyr::rename(chr=chromosome, alt=variant_bases, ref=reference_bases) %>%
+  filter(evidence_status == "accepted") %>%
+  filter(variant_origin == "Somatic Mutation") %>%
+  filter(evidence_type == "Predictive" & evidence_direction == "Supports")
 
 ###################
 #
@@ -130,10 +136,14 @@ mvld <- location %>%
   dplyr::select(-Gene, -HGNC_ID) %>%       # drop Ensembl Gene ID as we're using HUGO from here on
   dplyr::rename(gene_symbol = SYMBOL, Type = VARIANT_CLASS) %>%
   dplyr::mutate(Mutation = ifelse(Consequence == "stop gained", Consequence, Protein)) %>%
-  filter(filter == "PASS") %>% # filter quality
+  filter(filter == "PASS" | filter == ".") %>% # filter quality
   filter(PICK == 1) %>% # filter only transcripts that VEP picked
-  filter(BIOTYPE == "protein_coding" & Consequence != "synonymous_variant" & Consequence != "intron_variant") %>%
-  filter(LoF != "" | startsWith(SIFT, "deleterious") | endsWith(PolyPhen, "damaging"))
+  filter(BIOTYPE == "protein_coding" & Consequence != "synonymous" & Consequence != "intron")
+  #filter(LoF != "" | startsWith(SIFT, "deleterious") | endsWith(PolyPhen, "damaging"))
+
+if (nrow(mvld) == 0) {
+  stop("No variants found that passed the QC tests.")
+}
 
 # now query our noSQL database for information on drugs and driver status for all genes occuring in the
 # mvld. Then create a relational schema for each with hgnc_id as our 'key', resulting in 3 tables, one each for genes, drivers, and drugs.
@@ -145,7 +155,7 @@ biograph_json <- as.tbl_json(getURL(querystring))
 
 # get information on genes by hgnc_id
 biograph_genes <- biograph_json %>%
-  enter_object("_items") %>% gather_array() %>%
+  tidyjson::enter_object("_items") %>% gather_array() %>%
   spread_values(
     gene_symbol = jstring("gene_symbol"),
     status = jstring("status"),
