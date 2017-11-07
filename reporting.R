@@ -24,8 +24,8 @@ opt <- optparse::parse_args(opt_parser)
 
 # set this manually to run code interactively
 #debug <- opt$test
-#debug <- TRUE
-debug <- FALSE
+debug <- TRUE
+#debug <- FALSE
 
 if (!debug && (is.null(opt$file) || !file.exists(opt$file))) {
   optparse::print_help(opt_parser)
@@ -62,9 +62,9 @@ reportFile <- opt$report
 
 if (debug) {
   # for testing
-  #vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs_annotated.vcf"
+  vcfFile <- "strelka.passed.missense.somatic.snvs_annotated.vcf"
   #vcfFile <- "inst/extdata/strelka.passed.nonsense.somatic.snvs.vcf.out.vcf"
-  vcfFile <- "inst/extdata/test.vcf"
+  #vcfFile <- "inst/extdata/test.vcf"
 
   # test without annotation
   #vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs.vcf"
@@ -99,7 +99,7 @@ civic_evidence <- read.table(civic_source, sep="\t", header=T, fill = T, quote =
 #
 ###################
 
-vcf <- VariantAnnotation::readVcf(vcfFile)
+vcf <- VariantAnnotation::readVcf(vcfFile, "hg19")
 info <- rownames(VariantAnnotation::info(VariantAnnotation::header(vcf)))
 if (!("CSQ" %in% info)) {
   stop("Please run VEP on this VCF before generating a report.")
