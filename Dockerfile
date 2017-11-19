@@ -3,7 +3,7 @@ FROM ensemblorg/ensembl-vep:latest
 # install and configure required vep plugins
 USER vep
 WORKDIR $HOME/src/ensembl-vep
-RUN ./INSTALL.pl -a p -g LoFtool,GO
+RUN ./INSTALL.pl -a p -g LoFtool
 
 USER root
 # install current version of R and required packages for vep
@@ -11,17 +11,6 @@ RUN sh -c 'echo "deb http://cran.rstudio.com/bin/linux/ubuntu xenial/" >> /etc/a
  sh -c 'echo "deb http://ftp.halifax.rwth-aachen.de/ubuntu xenial-backports main restricted universe" >> /etc/apt/sources.list' && \
  gpg --keyserver keyserver.ubuntu.com --recv-key E084DAB9 && \
  gpg -a --export E084DAB9 | apt-key add -
- # apt-get -y update
- # install add-apt-repository
- # apt-get install -y software-properties-common && \
- # add-apt-repository ppa:marutter/rrutter -y && \
- # add-apt-repository ppa:marutter/c2d4u -y && \
- # add-apt-repository ppa:openjdk-r/ppa -y && \
- # apt-get update && \
- # apt-get install -y --no-install-recommends r-base r-base-dev libcurl4-openssl-dev openjdk-7-jdk r-cran-rjava libssh2-1-dev libcairo2-dev \
- #  r-cran-devtools r-cran-tidyr r-cran-dplyr r-cran-rmysql r-cran-reporters r-cran-stringr r-cran-xml r-cran-optparse \
- #  r-cran-readr r-bioc-biocgenerics r-bioc-genomicranges r-bioc-biostrings r-bioc-genomeinfodb r-bioc-summarizedexperiment \
- #  r-bioc-rsamtools r-bioc-biobase r-bioc-iranges r-bioc-annotationdbi r-bioc-genomicalignments samtools
 
 RUN apt-get -y update && \
   apt-get install -y r-base libxml2-dev libcurl4-openssl-dev libssh2-1-dev libcairo2-dev samtools libpq-dev
