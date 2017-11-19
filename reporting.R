@@ -3,10 +3,14 @@
 # reporting.R
 # Julian Heinrich (julian.heinrich@uni-tuebingen.de)
 #
-# This script parses a vcf file and generates two output files:
-# a xml and a docx file, each containing information about the most
+# This script parses a vcf file and generates two a docx file containing information about the most
 # relevant mutations found in the input vcf that can be used for
 # clinical reporting.
+
+# set this manually to run code interactively
+#debug <- opt$test
+#debug <- TRUE
+debug <- FALSE
 
 options(warn=1)
 
@@ -14,28 +18,15 @@ options(warn=1)
 option_list = list(
   optparse::make_option(c("-f", "--file"), type = "character", help = "the input file in vcf format", default = NULL),
   optparse::make_option(c("-r", "--report"), type = "character", help = "the file name for the detailed output report", default = NULL)
-  #optparse::make_option(c("-t", "--template"), type = "character", help = "the file name of the report template", default = NULL),
-  #optparse::make_option(c("-c", "--vepconfig"), type = "character", help = "ensembl-vep configuration file", default = NULL),
-  #optparse::make_option(c("-x", "--test"), type = "logical", help = "generate test report", default = FALSE)
 )
 
 opt_parser <- optparse::OptionParser(option_list = option_list)
 opt <- optparse::parse_args(opt_parser)
 
-# set this manually to run code interactively
-#debug <- opt$test
-debug <- TRUE
-#debug <- FALSE
-
 if (!debug && (is.null(opt$file) || !file.exists(opt$file))) {
   optparse::print_help(opt_parser)
   stop("Please supply a valid input file")
 }
-
-# if (!debug && (is.null(opt$template) || !file.exists(opt$template))) {
-#   optparse::print_help(opt_parser)
-#   stop("Please supply a valid template file")
-# }
 
 # make sure that all required packages are available
 # this tries to install missing packages that are missing
@@ -62,7 +53,8 @@ reportFile <- opt$report
 
 if (debug) {
   # for testing
-  vcfFile <- "strelka.passed.missense.somatic.snvs_annotated.vcf"
+  #vcfFile <- "strelka.passed.missense.somatic.snvs_annotated.vcf"
+  vcfFile <- "test.vcf"
   #vcfFile <- "inst/extdata/strelka.passed.nonsense.somatic.snvs.vcf.out.vcf"
   #vcfFile <- "inst/extdata/test.vcf"
 
@@ -70,7 +62,7 @@ if (debug) {
   #vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs.vcf"
 }
 
-if (is.null(reportFile)) {
+if (!exists('reportFile') || is.null(reportFile)) {
   reportFile <- paste(tools::file_path_sans_ext(vcfFile), "docx", sep=".")
   msg <- paste("Invalid output file or option not given. Using", reportFile)
   print(msg)
@@ -84,7 +76,7 @@ if (is.null(reportFile)) {
 # Collects the most recent data from CiVIC and returns a list with two data frames for genes and evidence.
 civic_source = "https://civic.genome.wustl.edu/downloads/nightly/nightly-ClinicalEvidenceSummaries.tsv"
 if (debug) {
-  civic_source = "inst/extdata/nightly-ClinicalEvidenceSummaries.tsv"
+  civic_source = "nightly-ClinicalEvidenceSummaries.tsv"
 }
 
 civic_evidence <- read.table(civic_source, sep="\t", header=T, fill = T, quote = "\"", comment.char = "%") %>%
@@ -411,15 +403,10 @@ if (nrow(references) > 0) {
 
   my_references_FTable <- flextable::flextable(data = as.data.frame(references)) %>%
     theme_vanilla() %>%
-#    fontsize(9) %>%
-    # border() %>%
-    align(align = "left", part = "all") %>%
-    width("rowid", 0.5) %>%
-    width("citation", 6)
+    align(align = "left", part = "all")
 
   mydoc <- mydoc %>%
     body_add_par('References', style = 'heading 1') %>%
-    # body_add_fpar(fpar(ftext('References', prop = header_props)), style = "centered") %>%
     body_add_flextable(my_references_FTable)
 }
 
@@ -439,4 +426,3 @@ if (nrow(mvld) > 0) {
 }
 
 print(mydoc, target = reportFile)
-# ReporteRs::writeDoc(mydoc, file = reportFile)
