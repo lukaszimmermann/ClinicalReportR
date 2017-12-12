@@ -38,7 +38,7 @@ Now we download some data for required for ensemble-vep:
 This will download cache files into `$CLINICALREPORTR`, e.g. the directory you cloned this repository into. 
 
 ```
-11. docker run -t -i -v $CLINICALREPORTR:/data personalizedoncology/clinicalreportr:latest vep -i /data/my.vcf -o my_annotated.vcf
+11. docker run -t -i -v $CLINICALREPORTR:/data personalizedoncology/clinicalreportr:latest vep -i /data/strelka.passed.missense.somatic.snvs_test.vcf -o my_annotated.vcf
 12. Rscript reporting.R -f my_annotated.vcf
 ```
 

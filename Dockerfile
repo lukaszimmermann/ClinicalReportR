@@ -1,9 +1,11 @@
 FROM ensemblorg/ensembl-vep:latest
 
-# install and configure required vep plugins
+# update vep, install and configure required vep plugins
 USER vep
 WORKDIR $HOME/src/ensembl-vep
-RUN ./INSTALL.pl -a p -g LoFtool
+RUN git pull && \
+  git checkout release/91 && \
+  ./INSTALL.pl -a p -g LoFtool
 
 USER root
 # install current version of R and required packages for vep
