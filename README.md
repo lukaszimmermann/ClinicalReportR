@@ -31,8 +31,8 @@ Now we download some data for required for ensemble-vep:
 ```
 8. wget http://www.broadinstitute.org/~konradk/loftee/human_ancestor.fa.rz
 9. wget http://www.broadinstitute.org/~konradk/loftee/human_ancestor.fa.rz.fai
-10. wget https://github.com/Ensembl/VEP_plugins/blob/release/90/LoFtool_scores.txt
-11. docker run -t -i -v $CLINICALREPORTR:/home/vep/.vep personalizedoncology/clinicalreportr:latest perl /home/vep/src/ensembl-vep/INSTALL.pl perl INSTALL.pl -a cf -s homo_sapiens -y GRCh38
+10. wget https://raw.githubusercontent.com/Ensembl/VEP_plugins/release/90/LoFtool_scores.txt
+11. docker run -t -i -v $CLINICALREPORTR:/home/vep/.vep personalizedoncology/clinicalreportr:latest perl /home/vep/src/ensembl-vep/INSTALL.pl -a acf -s homo_sapiens -y GRCh38
 ```
 
 This will download cache files into `$CLINICALREPORTR`, e.g. the directory you cloned this repository into. 

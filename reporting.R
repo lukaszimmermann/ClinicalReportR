@@ -34,6 +34,12 @@ list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstacksha
 new.packages <- list.of.packages.cran[!(list.of.packages.cran %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages, repos = "http://cran.rstudio.com/")
 
+devtools::install_github("jeremystan/tidyjson")
+library(tidyjson)
+
+devtools::install_github("davidgohel/officer")
+library(officer)
+
 list.of.packages.bioconductor <- c("VariantAnnotation")
 new.packages <- list.of.packages.bioconductor[!(list.of.packages.bioconductor %in% installed.packages()[,"Package"])]
 if(length(new.packages)) {
