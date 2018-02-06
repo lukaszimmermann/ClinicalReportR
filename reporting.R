@@ -30,7 +30,7 @@ if (!debug && (is.null(opt$file) || !file.exists(opt$file))) {
 
 # make sure that all required packages are available
 # this tries to install missing packages that are missing
-list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "flextable", "optparse", "readr", "tidyjson", "RCurl", "devtools")
+list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "flextable", "optparse", "readr", "RCurl", "devtools")
 new.packages <- list.of.packages.cran[!(list.of.packages.cran %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages, repos = "http://cran.rstudio.com/")
 
@@ -223,7 +223,7 @@ lof_driver <- biograph_driver %>%
   dplyr::summarize(mutation = unique(Mutation), Confidence = n(), References = paste(driver_pmid, collapse = "|")) %>%
   dplyr::arrange(desc(Confidence)) %>%
   dplyr::select(-Mutation) %>%
-  dplyr::rename(Gene = gene_symbol, , Mutation = mutation)
+  dplyr::rename(Gene = gene_symbol, Mutation = mutation)
 
 # cancer drug targets with mutation
 
