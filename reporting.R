@@ -30,9 +30,18 @@ if (!debug && (is.null(opt$file) || !file.exists(opt$file))) {
 
 # make sure that all required packages are available
 # this tries to install missing packages that are missing
-list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "flextable", "optparse", "readr", "tidyjson", "RCurl")
+list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "flextable", "optparse", "readr", "RCurl", "devtools")
 new.packages <- list.of.packages.cran[!(list.of.packages.cran %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages, repos = "http://cran.rstudio.com/")
+
+devtools::install_github("jeremystan/tidyjson")
+library(tidyjson)
+
+devtools::install_github("davidgohel/officer")
+library(officer)
+
+# install.packages("jsonlite", repos="http://cran.r-project.org")
+# library(jsonlite)
 
 list.of.packages.bioconductor <- c("VariantAnnotation")
 new.packages <- list.of.packages.bioconductor[!(list.of.packages.bioconductor %in% installed.packages()[,"Package"])]
@@ -91,7 +100,7 @@ civic_evidence <- read.table(civic_source, sep="\t", header=T, fill = T, quote =
 #
 ###################
 
-vcf <- VariantAnnotation::readVcf(vcfFile, "hg19")
+vcf <- VariantAnnotation::readVcf(vcfFile, "GRCh38") #hg19 -> GRCh38
 info <- rownames(VariantAnnotation::info(VariantAnnotation::header(vcf)))
 if (!("CSQ" %in% info)) {
   stop("Please run VEP on this VCF before generating a report.")
@@ -120,7 +129,7 @@ mvld <- location %>%
   tidyr::separate("CSQ", fields, sep = "\\|") %>%
   mutate(Consequence = stringr::str_replace_all(stringr::str_extract(Consequence, "^(?:(?!_variant)\\w)*"), "_", " "),
   #       reference_build = "GRCh37",
-         hgnc_id = as.integer(HGNC_ID),
+         hgnc_id = as.integer(substring(HGNC_ID, 6)),
          dbSNP = as.character(stringr::str_extract_all(Existing_variation, "rs\\w+")),
          COSMIC = as.character(stringr::str_extract_all(Existing_variation, "COSM\\w+")),
          DNA = stringr::str_extract(HGVSc, "(?<=:).*"),
@@ -144,6 +153,8 @@ db_baseurl = 'http://localhost:5000/biograph_genes?where={"hgnc_id":{"$in":["'
 querystring = URLencode(paste(db_baseurl, paste(unique(mvld$hgnc_id), collapse = '","'), '"]}}', sep=''))
 
 biograph_json <- as.tbl_json(getURL(querystring))
+#a = serializeJSON(biograph_json, pretty = TRUE)
+
 
 # get information on genes by hgnc_id
 biograph_genes <- biograph_json %>%
@@ -208,10 +219,11 @@ biograph_driver <- biograph_json %>%
 
 # driver genes with mutation (irrespective of being a drug target or not)
 lof_driver <- biograph_driver %>%
-  dplyr::group_by(gene_symbol) %>%
-  dplyr::summarize(Mutation = unique(Mutation), Confidence = n(), References = paste(driver_pmid, collapse = "|")) %>%
+  dplyr::group_by(gene_symbol, Mutation) %>%
+  dplyr::summarize(mutation = unique(Mutation), Confidence = n(), References = paste(driver_pmid, collapse = "|")) %>%
   dplyr::arrange(desc(Confidence)) %>%
-  dplyr::rename(Gene = gene_symbol)
+  dplyr::select(-Mutation) %>%
+  dplyr::rename(Gene = gene_symbol, Mutation = mutation)
 
 # cancer drug targets with mutation
 
