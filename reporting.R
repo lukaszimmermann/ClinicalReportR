@@ -31,24 +31,24 @@ if (!debug && (is.null(opt$file) || !file.exists(opt$file))) {
 # make sure that all required packages are available
 # this tries to install missing packages that are missing
 list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "flextable", "optparse", "readr", "RCurl", "devtools")
-new.packages <- list.of.packages.cran[!(list.of.packages.cran %in% installed.packages()[,"Package"])]
-if(length(new.packages)) install.packages(new.packages, repos = "http://cran.rstudio.com/")
+# new.packages <- list.of.packages.cran[!(list.of.packages.cran %in% installed.packages()[,"Package"])]
+# if(length(new.packages)) install.packages(new.packages, repos = "http://cran.rstudio.com/")
 
-devtools::install_github("jeremystan/tidyjson")
+# devtools::install_github("jeremystan/tidyjson")
 library(tidyjson)
 
-devtools::install_github("davidgohel/officer")
+# devtools::install_github("davidgohel/officer")
 library(officer)
 
 # install.packages("jsonlite", repos="http://cran.r-project.org")
 # library(jsonlite)
 
-list.of.packages.bioconductor <- c("VariantAnnotation")
-new.packages <- list.of.packages.bioconductor[!(list.of.packages.bioconductor %in% installed.packages()[,"Package"])]
-if(length(new.packages)) {
-  source("https://bioconductor.org/biocLite.R")
-  biocLite(new.packages)
-}
+list.of.packages.bioconductor <- c("VariantAnnotation", "rjson")
+# new.packages <- list.of.packages.bioconductor[!(list.of.packages.bioconductor %in% installed.packages()[,"Package"])]
+# if(length(new.packages)) {
+#   source("https://bioconductor.org/biocLite.R")
+#   biocLite(new.packages)
+# }
 
 lapply(c(list.of.packages.cran, list.of.packages.bioconductor), library, character.only=T)
 
@@ -56,6 +56,7 @@ lapply(c(list.of.packages.cran, list.of.packages.bioconductor), library, charact
 # 1. sudo R CMD javareconf
 # 2. sudo ln -f -s $(/usr/libexec/java_home)/jre/lib/server/libjvm.dylib /usr/local/lib
 # 3. install.packages("rJava", type = "source")
+
 
 vcfFile <- opt$file
 reportFile <- opt$report
@@ -100,7 +101,7 @@ civic_evidence <- read.table(civic_source, sep="\t", header=T, fill = T, quote =
 #
 ###################
 
-vcf <- VariantAnnotation::readVcf(vcfFile, "GRCh38") #hg19 -> GRCh38
+vcf <- VariantAnnotation::readVcf(vcfFile, "GRCh37") #hg19 -> GRCh37
 info <- rownames(VariantAnnotation::info(VariantAnnotation::header(vcf)))
 if (!("CSQ" %in% info)) {
   stop("Please run VEP on this VCF before generating a report.")
@@ -129,7 +130,7 @@ mvld <- location %>%
   tidyr::separate("CSQ", fields, sep = "\\|") %>%
   mutate(Consequence = stringr::str_replace_all(stringr::str_extract(Consequence, "^(?:(?!_variant)\\w)*"), "_", " "),
   #       reference_build = "GRCh37",
-         hgnc_id = as.integer(substring(HGNC_ID, 6)),
+         hgnc_id = as.integer(HGNC_ID),
          dbSNP = as.character(stringr::str_extract_all(Existing_variation, "rs\\w+")),
          COSMIC = as.character(stringr::str_extract_all(Existing_variation, "COSM\\w+")),
          DNA = stringr::str_extract(HGVSc, "(?<=:).*"),
