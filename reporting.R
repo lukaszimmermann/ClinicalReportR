@@ -43,7 +43,7 @@ library(officer)
 # install.packages("jsonlite", repos="http://cran.r-project.org")
 # library(jsonlite)
 
-list.of.packages.bioconductor <- c("VariantAnnotation", "rjson")
+list.of.packages.bioconductor <- c("VariantAnnotation")
 # new.packages <- list.of.packages.bioconductor[!(list.of.packages.bioconductor %in% installed.packages()[,"Package"])]
 # if(length(new.packages)) {
 #   source("https://bioconductor.org/biocLite.R")
@@ -295,6 +295,17 @@ references <- references_json  %>%
   left_join(reference_map, by = c("name" = "References")) %>%
   dplyr::select(rowid, citation)
 
+
+if (nrow(references) > 0){
+  if (nrow(mvld) > 0) {
+    appendix <- mvld %>%
+      dplyr::select(Gene = gene_symbol, Mutation, dbSNP, COSMIC) %>%
+      dplyr::mutate(COSMIC = ifelse(COSMIC == "character(0)", NA, COSMIC)) 
+
+  }
+}
+
+
 # now replace pubmed ids with indexes for all the previous tables
 
 if (nrow(lof_driver)) {
@@ -341,6 +352,22 @@ if (nrow(drug_variants)) {
     summarise(References = paste(rowid, collapse = ",")) %>%
     arrange(Evidence)
 }
+
+
+########################### Converting dataframes to json format (only applied to tables that are printed in report).
+lof_driver_json <- jsonlite::toJSON(lof_driver , dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
+lof_variant_dt_table_direct_json <- jsonlite::toJSON(lof_variant_dt_table , dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
+lof_civic_dt_table_indirect_json <- jsonlite::toJSON(lof_civic_dt_table, dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
+drug_variants_json <- jsonlite::toJSON(drug_variants, dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
+references_table_json <- jsonlite::toJSON(references, dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
+appendix_table_json <- jsonlite::toJSON(appendix, dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
+
+# Merge tables into one 'report' json.
+
+report <- paste0('{"Somatic Mutations in Known Driver Genes":',lof_driver_json,',',"\n", '"Somatic Mutations in Pharmaceutical Target Proteins":{',"\n",'"Direct Association (Mutation in drug target)":',lof_variant_dt_table_direct_json,',',"\n",'"Indirect Association (other Mutations with known effect on drug)":',lof_civic_dt_table_indirect_json,"\n" ,'}', ',',"\n", '"Somatic Mutations with known pharmacogenetic effect":',drug_variants_json,',',"\n",'"References":',references_table_json, '}')
+writeLines(report,"report.json")
+
+
 
 ###################
 #
