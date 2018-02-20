@@ -132,7 +132,7 @@ mvld <- location %>%
   #       reference_build = "GRCh37",
          hgnc_id = as.integer(HGNC_ID),
          dbSNP = as.character(stringr::str_extract_all(Existing_variation, "rs\\w+")),
-         COSMIC = as.character(stringr::str_extract_all(Existing_variation, "COSM\\w+")),
+         COSMIC = stringr::str_extract_all(Existing_variation, "COSM\\w+"),
          DNA = stringr::str_extract(HGVSc, "(?<=:).*"),
          Protein = stringr::str_extract(HGVSp, "(?<=:).*")) %>% # positive lookbehind
   dplyr::select(-Gene, -HGNC_ID) %>%       # drop Ensembl Gene ID as we're using HUGO from here on
@@ -299,9 +299,7 @@ references <- references_json  %>%
 if (nrow(references) > 0){
   if (nrow(mvld) > 0) {
     appendix <- mvld %>%
-      dplyr::select(Gene = gene_symbol, Mutation, dbSNP, COSMIC) %>%
-      dplyr::mutate(COSMIC = ifelse(COSMIC == "character(0)", NA, COSMIC)) 
-
+      dplyr::select(Gene = gene_symbol, Mutation, dbSNP, COSMIC) 
   }
 }
 
@@ -363,8 +361,7 @@ references_table_json <- jsonlite::toJSON(references, dataframe = c("rows"), mat
 appendix_table_json <- jsonlite::toJSON(appendix, dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
 
 # Merge tables into one 'report' json.
-
-report <- paste0('{"Somatic Mutations in Known Driver Genes":',lof_driver_json,',',"\n", '"Somatic Mutations in Pharmaceutical Target Proteins":{',"\n",'"Direct Association (Mutation in drug target)":',lof_variant_dt_table_direct_json,',',"\n",'"Indirect Association (other Mutations with known effect on drug)":',lof_civic_dt_table_indirect_json,"\n" ,'}', ',',"\n", '"Somatic Mutations with known pharmacogenetic effect":',drug_variants_json,',',"\n",'"References":',references_table_json, '}')
+report <- paste0('{"Somatic Mutations in Known Driver Genes":',lof_driver_json,',',"\n", '"Somatic Mutations in Pharmaceutical Target Proteins":{',"\n",'"Direct Association (Mutation in drug target)":',lof_variant_dt_table_direct_json,',',"\n",'"Indirect Association (other Mutations with known effect on drug)":',lof_civic_dt_table_indirect_json,"\n" ,'}', ',',"\n", '"Somatic Mutations with known pharmacogenetic effect":',drug_variants_json,',',"\n",'"References":',references_table_json,',',"\n",'"Appendix":',appendix_table_json ,"\n",'}')
 writeLines(report,"report.json")
 
 
