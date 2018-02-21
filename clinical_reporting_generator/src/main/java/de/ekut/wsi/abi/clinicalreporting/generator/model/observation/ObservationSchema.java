@@ -1,6 +1,7 @@
 package de.ekut.wsi.abi.clinicalreporting.generator.model.observation;
 
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * An Observation schema consists of a list of attributes (Strings) that an observation has.
@@ -21,6 +22,11 @@ public final class ObservationSchema {
 
 		// Copy makes ObservationSchema immutable
 		this.keys = Arrays.copyOf(keys, keys.length);
+	}
+	
+	public ObservationSchema(final List<String> keys) {
+		
+		this.keys = keys.toArray(new String[] {});
 	}
 	
 	public String[] getKeys() {

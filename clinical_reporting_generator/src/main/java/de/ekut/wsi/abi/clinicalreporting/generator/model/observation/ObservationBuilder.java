@@ -1,5 +1,7 @@
 package de.ekut.wsi.abi.clinicalreporting.generator.model.observation;
 
+import de.ekut.wsi.abi.clinicalreporting.generator.model.observation.missingvalues.MissingValuesStrategy;
+
 public interface ObservationBuilder {
 
 	/**
@@ -7,9 +9,7 @@ public interface ObservationBuilder {
 	 * @return
 	 */
 	String getKey() throws IllegalStateException;
-	
 	ObservationBuilder withNextAttribute(final String value);
-	
-	// TODO Change Return type to observation
-	void build();
+	Observation build(final MissingValuesStrategy missingValuesStrategy);
+	boolean hasMoreAttributes();
 }

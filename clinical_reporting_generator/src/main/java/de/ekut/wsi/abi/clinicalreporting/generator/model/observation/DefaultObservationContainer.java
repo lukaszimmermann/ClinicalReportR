@@ -27,6 +27,7 @@ public class DefaultObservationContainer implements ObservationContainer {
 		return this.schema;
 	}
 	
+	@Override
 	public ObservationBuilder constructNewObservation() {
 		
 		return new DefaultObservationBuilder(new ObservationContainerHandle() {

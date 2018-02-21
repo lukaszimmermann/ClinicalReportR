@@ -5,7 +5,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-public final class DefaultObservation implements Observation {
+final class DefaultObservation implements Observation {
 
 	private final Map<String, String> attributes;
 	

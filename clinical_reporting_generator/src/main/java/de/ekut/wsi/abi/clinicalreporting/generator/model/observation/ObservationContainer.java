@@ -8,4 +8,6 @@ package de.ekut.wsi.abi.clinicalreporting.generator.model.observation;
 public interface ObservationContainer {
 	
 	ObservationSchema getSchema();
+
+	ObservationBuilder constructNewObservation();
 }

@@ -1,6 +1,10 @@
 package de.ekut.wsi.abi.clinicalreporting.generator.model.observation;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+
+import de.ekut.wsi.abi.clinicalreporting.generator.model.observation.missingvalues.MissingValuesStrategy;
 
 final class DefaultObservationBuilder implements ObservationBuilder {
 
@@ -10,7 +14,8 @@ final class DefaultObservationBuilder implements ObservationBuilder {
 	private final int size;
 	private int index;
 
-	DefaultObservationBuilder(final ObservationContainerHandle handle) {
+	DefaultObservationBuilder(
+			final ObservationContainerHandle handle) {
 
 		this.observationContainerHandle = handle;
 		this.keys = handle.getSchema().getKeys();
@@ -21,7 +26,7 @@ final class DefaultObservationBuilder implements ObservationBuilder {
 
 	private void checkExhausted() {
 		
-		if (this.index >= this.size) {
+		if ( ! this.hasMoreAttributes()) {
 			
 			// TODO Message
 			throw new IllegalStateException();
@@ -46,8 +51,28 @@ final class DefaultObservationBuilder implements ObservationBuilder {
 
 
 	@Override
-	public void build() {
+	public Observation build(final MissingValuesStrategy missingValuesStrategy) {
 	
+		// fill the remaining values with the missing values strategy
+		for (int i = this.index; i < this.size; ++i) {
+			
+			this.values[i] = missingValuesStrategy.resolve(this);
+		}
+		
 		this.observationContainerHandle.addComponent(Arrays.copyOf(this.values, this.values.length));
+		final Map<String, String> plainObservation = new HashMap<>();
+	
+		// Map keys and values
+		for (int i = 0; i < this.keys.length; ++i) {
+			
+			plainObservation.put(this.keys[i], this.values[i]);
+		}
+		return new DefaultObservation(plainObservation);
+	}
+
+	@Override
+	public boolean hasMoreAttributes() {
+		
+		return this.index < this.size;
 	}
 }
