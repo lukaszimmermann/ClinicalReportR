@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import de.ekut.wsi.abi.clinicalreporting.generator.model.assertions.Assert;
+
 public class DefaultObservationContainer implements ObservationContainer {
 
 	private final ObservationSchema schema;
@@ -13,13 +15,15 @@ public class DefaultObservationContainer implements ObservationContainer {
 		
 		this.schema = schema;
 		
-		if (this.schema == null) {
-			
-			throw new NullPointerException("ObservationSchema must not be null!");
-		}
+		Assert.notNull(this.schema, "ObservationSchema must not be null!");
 		this.components = new ArrayList<>();
 	}
 	
+	@Override
+	public int numObservations() {
+		
+		return this.components.size();
+	}
 	
 	@Override
 	public ObservationSchema getSchema() {
@@ -44,5 +48,17 @@ public class DefaultObservationContainer implements ObservationContainer {
 				DefaultObservationContainer.this.components.add(Arrays.copyOf(component, component.length));
 			}
 		});
+	}
+
+	@Override
+	public List<String[]> getRawObservations() {
+		
+		final List<String[]> res = new ArrayList<>();
+		
+		for (final String[] component : this.components) {
+			
+			res.add(Arrays.copyOf(component, component.length));
+		}
+		return res;
 	}
 }

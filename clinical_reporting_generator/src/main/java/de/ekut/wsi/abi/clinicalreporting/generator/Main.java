@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 
 import de.ekut.wsi.abi.clinicalreporting.generator.model.document.DocumentTree;
 import de.ekut.wsi.abi.clinicalreporting.generator.model.document.DocumentTreeNode;
+import de.ekut.wsi.abi.clinicalreporting.generator.model.docx4j.DocumentGenerator;
 import de.ekut.wsi.abi.clinicalreporting.generator.model.traversal.PreorderTraversal;
 
 
@@ -66,13 +67,8 @@ public final class Main {
 
 				// Create the output package
 				final WordprocessingMLPackage wordMLPackage = WordprocessingMLPackage.createPackage();
-			
-				for (final DocumentTreeNode node : new PreorderTraversal(documentTree)) {
-					
-					
-				}
-			
-				
+				new DocumentGenerator(documentTree).generate(wordMLPackage);
+
 				 wordMLPackage.save(new java.io.File(outputFile) );
 
 			} catch (FileNotFoundException e) {
