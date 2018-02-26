@@ -11,12 +11,12 @@ import de.ekut.wsi.abi.clinicalreporting.generator.model.observation.Observation
  *
  */
 
-public final class DocumentTable implements DocumentTreeNode {
+public final class DocumentMultiObservationTable implements DocumentTreeNode {
 
 	private final ObservationContainer container;
 	private final String title;
 	
-	public DocumentTable(final ObservationContainer observationContainer, final String title) {
+	public DocumentMultiObservationTable(final ObservationContainer observationContainer, final String title) {
 		
 		this.container = observationContainer;
 		this.title = title;

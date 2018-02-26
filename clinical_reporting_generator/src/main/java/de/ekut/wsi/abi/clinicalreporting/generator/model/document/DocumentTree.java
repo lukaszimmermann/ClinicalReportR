@@ -13,6 +13,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import de.ekut.wsi.abi.clinicalreporting.generator.model.observation.DefaultObservationContainer;
+import de.ekut.wsi.abi.clinicalreporting.generator.model.observation.Observation;
+import de.ekut.wsi.abi.clinicalreporting.generator.model.observation.ObservationContainer;
 import de.ekut.wsi.abi.clinicalreporting.generator.model.observation.ObservationSchema;
 import de.ekut.wsi.abi.clinicalreporting.generator.model.observation.ObservationUtils;
 import de.ekut.wsi.abi.clinicalreporting.generator.model.observation.missingvalues.MissingValuesNA;
@@ -21,6 +23,10 @@ public final class DocumentTree implements DocumentTreeNode {
 
 
 	private static final List<String> keyOrder = Arrays.asList(
+			"Patient Data",
+			"Name",
+			"Birthdate",
+			"Diagnosis",
 			"Somatic Mutations in Known Driver Genes",
 			"Somatic Mutations in Pharmaceutical Target Proteins",
 			"Somatic Mutations with known pharmacogenetic effect",
@@ -39,7 +45,7 @@ public final class DocumentTree implements DocumentTreeNode {
 	 * @param keySet
 	 * @return
 	 */
-	private static List<String> order(final Set<String> keySet) {
+	public static List<String> order(final Set<String> keySet) {
 		
 		final List<String> result = new ArrayList<>(keySet.size());
 		for (final String key : DocumentTree.keyOrder) {
@@ -66,13 +72,14 @@ public final class DocumentTree implements DocumentTreeNode {
 	 * @param o
 	 * @return
 	 */
-	private static final boolean isLeaf(final JSONObject o) {
+	private static final boolean isLeaf(final JSONObject o, final boolean array) {
 		
 		final Iterator<String> oIterator = o.keys();
 		while (oIterator.hasNext()) {
 			
 			final Object thing = o.get(oIterator.next());
-			if (thing instanceof JSONObject) {
+			
+			if (thing instanceof JSONObject || (array && thing instanceof JSONArray)) {
 				
 				return false;
 			}
@@ -81,8 +88,35 @@ public final class DocumentTree implements DocumentTreeNode {
 	}
 	
 	
+	private static final DocumentSingleObservationTable getSingleObservationTable(
+			final JSONObject object,
+			final String key) {
+		
+		final List<String> keys = DocumentTree.order(object.keySet());
+		final ObservationSchema schema = new ObservationSchema(keys);
+		final Map<String, String> rawObservation = new HashMap<>(keys.size());
+		
+		final ObservationContainer observationContainer = new DefaultObservationContainer(schema);
+		
+		for (final String attribute : keys) {
+			
+			final Object thing = object.get(attribute);
+			if (thing instanceof JSONObject) {
+				
+				return null;
+			}
+			rawObservation.put(attribute, thing.toString());
+		}
+		final Observation observation = ObservationUtils.addPlainObservation(
+				observationContainer,
+				rawObservation,
+				MissingValuesNA.INSTANCE);
+		
+		return new DocumentSingleObservationTable(observation, key);
+	}
 	
-	private static final DocumentTable getTable(
+	
+	private static final DocumentMultiObservationTable getMultiObservationTable(
 			final JSONArray array,
 			final String key) {
 		
@@ -102,8 +136,8 @@ public final class DocumentTree implements DocumentTreeNode {
 			}
 			final JSONObject jsonObject = (JSONObject) nextObject;
 			
-			// ensure that all children of the jsonObject are literals
-			if ( ! DocumentTree.isLeaf(jsonObject)) {
+			// ensure that all children of the jsonObject are literals, arrays are allowed
+			if ( ! DocumentTree.isLeaf(jsonObject, false)) {
 				return null;
 			}
 			final Set<String> keys = jsonObject.keySet();
@@ -127,7 +161,7 @@ public final class DocumentTree implements DocumentTreeNode {
 			ObservationUtils.addPlainObservation(container, plainObservation, MissingValuesNA.INSTANCE);
 		}
 
-		return new DocumentTable(container, key);
+		return new DocumentMultiObservationTable(container, key);
 	}
 	
 	
@@ -157,10 +191,22 @@ public final class DocumentTree implements DocumentTreeNode {
 	private static DocumentTreeNode parse(final Object o, final String key) {
 		
 		if (o instanceof JSONObject) {
-						
+			
+			final JSONObject jsonObject = (JSONObject) o;
+			
+			// Arrays are not allowed
+			if (DocumentTree.isLeaf(jsonObject, true)) {
+				
+				final DocumentSingleObservationTable table = DocumentTree.getSingleObservationTable(jsonObject, key);
+				if (table == null) {
+					
+					throw new IllegalStateException("Leaf Object cannot be parsed as single observation table");
+				}
+				return table;
+			}
+			
 			// Each object in the JSON tree corresponds to another DocumentTree
 			final DocumentTree result = new DocumentTree(key);
-			final JSONObject jsonObject = (JSONObject) o;
 			final List<String> jsonObjectKeys = DocumentTree.order(jsonObject.keySet());
 			
 			// Construct a DocumentTreeNode for each of the keys of this JSON object
@@ -169,14 +215,13 @@ public final class DocumentTree implements DocumentTreeNode {
 				
 				result.addChild(DocumentTree.parse(jsonObject.get(nextKey), nextKey));
 			}
-			
 			return result;
 			
 		} else if (o instanceof JSONArray) {
 			
 			final JSONArray jsonArray = (JSONArray) o;
 			// We have to check if this JSON Array corresonds to a table
-			final DocumentTable table = DocumentTree.getTable(jsonArray, key);
+			final DocumentMultiObservationTable table = DocumentTree.getMultiObservationTable(jsonArray, key);
 			
 			if (table == null) {
 				
@@ -184,6 +229,7 @@ public final class DocumentTree implements DocumentTreeNode {
 			}
 			return table;
 		}
+		
 		throw new IllegalStateException("Invalid Type of node");
 	}
 

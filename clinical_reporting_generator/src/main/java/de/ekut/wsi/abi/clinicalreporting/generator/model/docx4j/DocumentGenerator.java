@@ -1,6 +1,7 @@
 package de.ekut.wsi.abi.clinicalreporting.generator.model.docx4j;
 
 import java.math.BigInteger;
+import java.util.List;
 
 import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
 import org.docx4j.wml.BooleanDefaultTrue;
@@ -35,8 +36,11 @@ import org.docx4j.wml.U;
 import org.docx4j.wml.UnderlineEnumeration;
 
 import de.ekut.wsi.abi.clinicalreporting.generator.model.assertions.Assert;
-import de.ekut.wsi.abi.clinicalreporting.generator.model.document.DocumentTable;
+import de.ekut.wsi.abi.clinicalreporting.generator.model.document.DocumentMultiObservationTable;
+import de.ekut.wsi.abi.clinicalreporting.generator.model.document.DocumentSingleObservationTable;
+import de.ekut.wsi.abi.clinicalreporting.generator.model.document.DocumentTree;
 import de.ekut.wsi.abi.clinicalreporting.generator.model.document.DocumentTreeNode;
+import de.ekut.wsi.abi.clinicalreporting.generator.model.observation.Observation;
 import de.ekut.wsi.abi.clinicalreporting.generator.model.observation.ObservationContainer;
 import de.ekut.wsi.abi.clinicalreporting.generator.model.observation.ObservationSchema;
 import de.ekut.wsi.abi.clinicalreporting.generator.model.traversal.PreorderTraversal;
@@ -363,9 +367,49 @@ public final class DocumentGenerator {
 		pkg.getMainDocumentPart().addObject(paragraph);
 	}
 
+	
+	private void createSingleObservationTable(
+			final DocumentSingleObservationTable table,
+			final WordprocessingMLPackage pkg)	{
+	
+		final Observation observation = table.getObservation();
+		final List<String> keys = DocumentTree.order(observation.getKeys());
+		
+		addHeader(table.getTitle(), pkg);
 
-	private void createReportTable(
-			final DocumentTable table,
+		final Tbl tbl = objectFactory.createTbl();
+		TblPr tblPr = new TblPr();
+		TblStyle tblStyle = new TblStyle();
+		tblStyle.setVal("TableGrid");
+		tblPr.setTblStyle(tblStyle);
+		tbl.setTblPr(tblPr);
+		Tr tableRow = objectFactory.createTr();
+
+		// a default table cell style
+		final DocxStyle defStyle = new DocxStyle.Builder()
+				.bold(false)
+				.italic(false)
+				.underline(false)
+				.fontSize("20")
+				.horizAlignment(JcEnumeration.CENTER)
+				.build();
+
+		for (final String key: keys) {
+			tableRow = objectFactory.createTr();
+			
+			addTableCell(tableRow, key, 2000, defStyle, 1, null);
+			addTableCell(tableRow, observation.getAttribute(key), 2000, defStyle, 1, null);
+			tbl.getContent().add(tableRow);
+		}
+
+		pkg.getMainDocumentPart().addObject(tbl);
+		pkg.getMainDocumentPart().addParagraphOfText("");
+	}
+	
+	
+
+	private void createMultiObservationReportTable(
+			final DocumentMultiObservationTable table,
 			final WordprocessingMLPackage pkg) {
 
 		final ObservationContainer container = table.getObservationContainer();
@@ -431,16 +475,18 @@ public final class DocumentGenerator {
 	}
 
 
-
-
 	public void generate(final WordprocessingMLPackage pkg) {
 
 		for (final DocumentTreeNode node : new PreorderTraversal(this.documentTreeNode)) {
 
-			if (node instanceof DocumentTable) {
+			if (node instanceof DocumentMultiObservationTable) {
 
-				this.createReportTable((DocumentTable) node, pkg);
-			}	
+				this.createMultiObservationReportTable((DocumentMultiObservationTable) node, pkg);
+			}
+			else if (node instanceof DocumentSingleObservationTable) {
+				
+				this.createSingleObservationTable((DocumentSingleObservationTable) node, pkg);
+			}
 		}
 	}
 }
