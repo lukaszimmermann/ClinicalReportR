@@ -1,14 +1,19 @@
 #!/usr/bin/env Rscript --no-save --no-restore --no-init-file --no-site-file
 
 # reporting.R
-# Julian Heinrich (julian.heinrich@uni-tuebingen.de)
+# Julian Heinrich (julian@joules.de)
+# Bilge Sürün (sueruen@informatik.uni-tuebingen.de)
 #
 # This script parses a vcf file and generates two a docx file containing information about the most
 # relevant mutations found in the input vcf that can be used for
 # clinical reporting.
 
+# Create a new logger object.
+logger <- log4r::create.logger()
+# Set the logger's file output.
+log4r::logfile(logger) <- 'base.log'
+
 # set this manually to run code interactively
-#debug <- opt$test
 #debug <- TRUE
 debug <- FALSE
 
@@ -25,21 +30,38 @@ opt <- optparse::parse_args(opt_parser)
 
 if (!debug && (is.null(opt$file) || !file.exists(opt$file))) {
   optparse::print_help(opt_parser)
-  stop("Please supply a valid input file")
+  log4r::level(logger) <- 'ERROR'  
+  log4r::error(logger, "Input file is not provided.")
+  log4r::error(logger, "The proces is terminated.")
+  stop()
+#  stop("Please supply a valid input file")
+} else {
+  log4r::level(logger) <- 'INFO'
+  messages = paste(vcfFile, "is provided as input file")
+  log4r::info(logger, messages)
 }
 
 # make sure that all required packages are available
 # this tries to install missing packages that are missing
-list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "flextable", "optparse", "readr", "tidyjson", "RCurl")
-new.packages <- list.of.packages.cran[!(list.of.packages.cran %in% installed.packages()[,"Package"])]
-if(length(new.packages)) install.packages(new.packages, repos = "http://cran.rstudio.com/")
+list.of.packages.cran <- c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "flextable", "optparse", "readr", "RCurl", "devtools")
+# new.packages <- list.of.packages.cran[!(list.of.packages.cran %in% installed.packages()[,"Package"])]
+# if(length(new.packages)) install.packages(new.packages, repos = "http://cran.rstudio.com/")
+
+# devtools::install_github("jeremystan/tidyjson")
+library(tidyjson)
+
+# devtools::install_github("davidgohel/officer")
+library(officer)
+
+# install.packages("jsonlite", repos="http://cran.r-project.org")
+# library(jsonlite)
 
 list.of.packages.bioconductor <- c("VariantAnnotation")
-new.packages <- list.of.packages.bioconductor[!(list.of.packages.bioconductor %in% installed.packages()[,"Package"])]
-if(length(new.packages)) {
-  source("https://bioconductor.org/biocLite.R")
-  biocLite(new.packages)
-}
+# new.packages <- list.of.packages.bioconductor[!(list.of.packages.bioconductor %in% installed.packages()[,"Package"])]
+# if(length(new.packages)) {
+#   source("https://bioconductor.org/biocLite.R")
+#   biocLite(new.packages)
+# }
 
 lapply(c(list.of.packages.cran, list.of.packages.bioconductor), library, character.only=T)
 
@@ -48,23 +70,20 @@ lapply(c(list.of.packages.cran, list.of.packages.bioconductor), library, charact
 # 2. sudo ln -f -s $(/usr/libexec/java_home)/jre/lib/server/libjvm.dylib /usr/local/lib
 # 3. install.packages("rJava", type = "source")
 
+
 vcfFile <- opt$file
 reportFile <- opt$report
 
 if (debug) {
-  # for testing
-  #vcfFile <- "strelka.passed.missense.somatic.snvs_annotated.vcf"
+  # Provide test file here
   vcfFile <- "test.vcf"
-  #vcfFile <- "inst/extdata/strelka.passed.nonsense.somatic.snvs.vcf.out.vcf"
-  #vcfFile <- "inst/extdata/test.vcf"
-
-  # test without annotation
-  #vcfFile <- "inst/extdata/strelka.passed.missense.somatic.snvs.vcf"
 }
 
 if (!exists('reportFile') || is.null(reportFile)) {
   reportFile <- paste(tools::file_path_sans_ext(vcfFile), "docx", sep=".")
   msg <- paste("Invalid output file or option not given. Using", reportFile)
+  log4r::level(logger) <- 'INFO'
+  log4r::info(logger, msg)
   print(msg)
 }
 
@@ -74,13 +93,17 @@ if (!exists('reportFile') || is.null(reportFile)) {
 ###################
 
 # Collects the most recent data from CiVIC and returns a list with two data frames for genes and evidence.
-civic_source = "https://civic.genome.wustl.edu/downloads/nightly/nightly-ClinicalEvidenceSummaries.tsv"
-if (debug) {
-  civic_source = "nightly-ClinicalEvidenceSummaries.tsv"
-}
+civic_source = "https://civicdb.org/downloads/nightly/nightly-ClinicalEvidenceSummaries.tsv"
+# if (debug) {
+#   civic_source = "nightly-ClinicalEvidenceSummaries.tsv"
+# }
 
-civic_evidence <- read.table(civic_source, sep="\t", header=T, fill = T, quote = "\"", comment.char = "%") %>%
+civic_evidence <- read.table(civic_source, sep="\t", header=T, fill = T, quote = "", comment.char = "%") %>%
   dplyr::rename(chr=chromosome, alt=variant_bases, ref=reference_bases) %>%
+  dplyr::mutate(gene = as.character(gene),
+                  chr = as.character (chr),
+                  ref = as.character(ref),
+                  alt = as.character(alt)) %>%
   filter(evidence_status == "accepted") %>%
   filter(variant_origin == "Somatic Mutation") %>%
   filter(evidence_type == "Predictive" & evidence_direction == "Supports")
@@ -91,10 +114,18 @@ civic_evidence <- read.table(civic_source, sep="\t", header=T, fill = T, quote =
 #
 ###################
 
-vcf <- VariantAnnotation::readVcf(vcfFile, "hg19")
+vcf <- VariantAnnotation::readVcf(vcfFile, "GRCh37") #hg19 -> GRCh37
 info <- rownames(VariantAnnotation::info(VariantAnnotation::header(vcf)))
 if (!("CSQ" %in% info)) {
+  log4r::level(logger) <- "ERROR"
+  messages <- paste(vcfFile, "is not annotated.")
+  log4r::error(logger, messages)
+  log4r::error(logger, "Terminated.")
   stop("Please run VEP on this VCF before generating a report.")
+} else {
+  messages <- paste(vcfFile, "is fine.")
+  log4r::level(logger) <- "INFO"
+  log4r::info(logger, messages)
 }
 
 header <- stringr::str_sub(VariantAnnotation::info(VariantAnnotation::header(vcf))["CSQ",3], 51)
@@ -122,7 +153,7 @@ mvld <- location %>%
   #       reference_build = "GRCh37",
          hgnc_id = as.integer(HGNC_ID),
          dbSNP = as.character(stringr::str_extract_all(Existing_variation, "rs\\w+")),
-         COSMIC = as.character(stringr::str_extract_all(Existing_variation, "COSM\\w+")),
+         COSMIC = stringr::str_extract_all(Existing_variation, "COSM\\w+"),
          DNA = stringr::str_extract(HGVSc, "(?<=:).*"),
          Protein = stringr::str_extract(HGVSp, "(?<=:).*")) %>% # positive lookbehind
   dplyr::select(-Gene, -HGNC_ID) %>%       # drop Ensembl Gene ID as we're using HUGO from here on
@@ -134,7 +165,13 @@ mvld <- location %>%
   #filter(LoF != "" | startsWith(SIFT, "deleterious") | endsWith(PolyPhen, "damaging"))
 
 if (nrow(mvld) == 0) {
+  log4r::level(logger) <- "ERROR"
+  log4r::error(logger, "No variants found that passed the QC tests.")
+  log4r::error(logger, "Terminated.")
   stop("No variants found that passed the QC tests.")
+} else {
+  log4r::level(logger) <- "INFO"
+  log4r::info(logger, "MVLD is fine.")
 }
 
 # now query our noSQL database for information on drugs and driver status for all genes occuring in the
@@ -164,6 +201,7 @@ biograph_drugs <- biograph_json %>%
     gene_symbol = jstring("gene_symbol"),
     hgnc_id = jstring("hgnc_id")
     ) %>%
+  dplyr::select(-array.index) %>%
   enter_object("drugs") %>% gather_array() %>%
   spread_values(
     ATC_code = jstring("ATC_code"),
@@ -188,6 +226,7 @@ biograph_driver <- biograph_json %>%
     gene_symbol = jstring("gene_symbol"),
     hgnc_id = jstring("hgnc_id")
   ) %>%
+  dplyr::select(-array.index) %>%
   enter_object("cancer") %>% gather_array() %>%
   spread_values(
     driver_type = jstring("driver_type"),
@@ -195,7 +234,7 @@ biograph_driver <- biograph_json %>%
     driver_pmid = jstring("pmid")
   ) %>%
   mutate(hgnc_id = as.integer(hgnc_id)) %>%
-  left_join(mvld) %>%
+  left_join(mvld, by = c("gene_symbol", "hgnc_id")) %>%
   dplyr::select(gene_symbol, Mutation, driver_pmid)
 
 # prepare a tidy dataset, where all information on drugs and drivers is available for all mutations, i.e.
@@ -208,10 +247,11 @@ biograph_driver <- biograph_json %>%
 
 # driver genes with mutation (irrespective of being a drug target or not)
 lof_driver <- biograph_driver %>%
-  dplyr::group_by(gene_symbol) %>%
-  dplyr::summarize(Mutation = unique(Mutation), Confidence = n(), References = paste(driver_pmid, collapse = "|")) %>%
+  dplyr::group_by(gene_symbol, Mutation) %>%
+  dplyr::summarize(mutation = unique(Mutation), Confidence = n(), References = paste(driver_pmid, collapse = "|")) %>%
   dplyr::arrange(desc(Confidence)) %>%
-  dplyr::rename(Gene = gene_symbol)
+  dplyr::select(-Mutation) %>%
+  dplyr::rename(Gene = gene_symbol, Mutation = mutation)
 
 # cancer drug targets with mutation
 
@@ -220,7 +260,7 @@ lof_driver <- biograph_driver %>%
 lof_variant_dt_table <- biograph_drugs %>%
   # only cancer drug targets
   filter(is_cancer_drug & interaction_type == "target") %>%
-  dplyr::left_join(mvld) %>%
+  dplyr::left_join(mvld, by = c("gene_symbol", "hgnc_id")) %>%
   group_by(gene_symbol, Mutation, drug_name) %>%
   summarise(Confidence = n(), References = paste(unique(na.omit(drug_pmid)), collapse = "|")) %>%
   dplyr::select(Gene = gene_symbol, Mutation, Therapy = drug_name, Confidence, References) %>%
@@ -282,6 +322,24 @@ references <- references_json  %>%
   left_join(reference_map, by = c("name" = "References")) %>%
   dplyr::select(rowid, citation)
 
+
+if (nrow(references) > 0){
+  if (nrow(mvld) > 0) {
+    appendix <- mvld %>%
+      dplyr::select(Gene = gene_symbol, Mutation, dbSNP, COSMIC)
+    log4r::level (logger) <- 'INFO'
+    log4r::info (logger, " A non-empty 'appendix' table is created.")
+  } else {
+    # Set the current level of the logger.
+    log4r::level (logger) <- 'WARN'
+    log4r::warn(logger, "'Appendix' table is not generated since 'mvld' table is present.")
+  }
+} else {
+  log4r::level(logger) <- 'WARN'
+  log4r::warn(logger, "'References' and 'Appendix' tables will not be generated in the report since 'references' table is empty.")
+}
+
+
 # now replace pubmed ids with indexes for all the previous tables
 
 if (nrow(lof_driver)) {
@@ -289,23 +347,39 @@ if (nrow(lof_driver)) {
     mutate(References = str_split(References, "\\|")) %>%
     unnest(References) %>%
     mutate(References = str_trim(References)) %>%
-    left_join(reference_map) %>%
+    left_join(reference_map, by = "References") %>%
     group_by(Gene, Mutation, Confidence) %>%
     arrange(rowid, .by_group = T) %>%
     summarise(References = paste(rowid, collapse = ",")) %>%
     dplyr::arrange(desc(Confidence))
+  log4r::level(logger) <- 'INFO'
+  log4r::info(logger, "A non-empty 'lof_driver' tabel is present.")
+} else {
+  # Set the current level of the logger.
+  log4r::level(logger) <- 'WARN'
+  log4r::warn(logger, "'Somatic Mutations in Known Driver Genes' table will not be generated in the report since 'lof_driver' table is empty.")
 }
+
+if (nrow(lof_variant_dt_table) == FALSE & nrow(lof_civic_dt_table) == FALSE){
+  log4r::level(logger) <- 'WARN'
+  log4r::warn(logger, "'Somatic Mutations in Pharmaceutical Target Proteins' table will not be generated in the report since'lof_variant_dt_table' and  'lof_civic_dt_table' are empty.")
+} 
 
 if (nrow(lof_variant_dt_table)) {
   lof_variant_dt_table <- lof_variant_dt_table %>%
     mutate(References = str_split(References, "\\|")) %>%
     unnest(References) %>%
     mutate(References = str_trim(References)) %>%
-    left_join(reference_map) %>%
+    left_join(reference_map, by = "References") %>%
     group_by(Gene, Mutation, Therapy, Confidence) %>%
     arrange(rowid, .by_group = T) %>%
     summarise(References = paste(rowid, collapse = ",")) %>%
     dplyr::arrange(desc(Confidence))
+  log4r::level(logger) <- 'INFO'
+  log4r::info(logger, "A non-empty 'lof_variant_dt_table' is present.")
+} else {
+  log4r::level(logger) <- 'WARN'
+  log4r::warn(logger, "'Direct Association (Mutation in Drug Target)' table will not be generated in the report since 'lof_variant_dt_table' is empty.")
 }
 
 if (nrow(lof_civic_dt_table)) {
@@ -313,9 +387,14 @@ if (nrow(lof_civic_dt_table)) {
     mutate(References = str_split(References, "\\|")) %>%
     unnest(References) %>%
     mutate(References = str_trim(References)) %>%
-    left_join(reference_map) %>%
+    left_join(reference_map, by = "References") %>%
     group_by(Gene, Mutation, Therapy, Disease, Evidence) %>%
     summarise(References = paste(rowid, collapse = ","))
+  log4r::level(logger) <- 'INFO'
+  log4r::info(logger, "A non-empty 'lof_civic_dt_table' is present.")
+} else {
+  log4r::level(logger) <- 'WARN'
+  log4r::warn(logger, "'Indirect Association (Other Mutations with Known Effect on Drug)' table will not be generated in the report since 'lof_civic_dt_table' is empty.")
 }
 
 if (nrow(drug_variants)) {
@@ -323,106 +402,128 @@ if (nrow(drug_variants)) {
     mutate(References = str_split(References, "\\|")) %>%
     unnest(References) %>%
     mutate(References = str_trim(References)) %>%
-    left_join(reference_map) %>%
+    left_join(reference_map, by = "References") %>%
     group_by(Gene, Mutation, Therapy, Disease, Evidence) %>%
     summarise(References = paste(rowid, collapse = ",")) %>%
     arrange(Evidence)
+  log4r::level(logger) <- 'INFO'
+  log4r::info(logger, "A non-empty 'drug_variants' is present.")
+} else {
+  log4r::level(logger) <- 'WARN'
+  log4r::warn(logger, "'Somatic Mutations with Known Pharmacogenetic Effect' table will not be generated in the report since 'drug_variants' is empty. ")
 }
 
-###################
-#
-# write report
-#
-###################
 
-# write to docx (report)
-# template_file <- ifelse(debug, system.file('extdata','template_report_en.docx',package = 'ClinicalReportR'), opt$template)
-mydoc <- officer::read_docx()
+########################### Converting dataframes to json format (only applied to tables that are printed in report).
+# Create an empty json object of patient data 
+patient_info <- list(Name = "", Birthdate = "", Diagnosis = "" )
+patient_info_json <- jsonlite::toJSON(patient_info, prety = TRUE, auto_unbox = TRUE)
 
-# Default properties
-# header_props <- fp_text(font.size = 20, bold = T, color = 'white', shading.color = "orange", font.family = "Verdana")
-# header_par_props <- fp_par(text.align = "center")
+lof_driver_json <- jsonlite::toJSON(lof_driver , dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
+lof_variant_dt_table_direct_json <- jsonlite::toJSON(lof_variant_dt_table , dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
+lof_civic_dt_table_indirect_json <- jsonlite::toJSON(lof_civic_dt_table, dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
+drug_variants_json <- jsonlite::toJSON(drug_variants, dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
+references_table_json <- jsonlite::toJSON(references, dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
+appendix_table_json <- jsonlite::toJSON(appendix, dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
 
-# DRIVER
-if (nrow(lof_driver) > 0) {
+# Merge tables into one 'report' json.
+report <- paste0('{"Patient Data":',patient_info_json, ',',"\n", '"Somatic Mutations in Known Driver Genes":',lof_driver_json,',',"\n", '"Somatic Mutations in Pharmaceutical Target Proteins":{',"\n",'"Direct Association (Mutation in drug target)":',lof_variant_dt_table_direct_json,',',"\n",'"Indirect Association (other Mutations with known effect on drug)":',lof_civic_dt_table_indirect_json,"\n" ,'}', ',',"\n", '"Somatic Mutations with known pharmacogenetic effect":',drug_variants_json,',',"\n",'"References":',references_table_json,',',"\n",'"Appendix":',appendix_table_json ,"\n",'}')
+writeLines(report,"report.json")
 
-  my_driver_FTable = flextable::flextable(data = as.data.frame(lof_driver)) %>%
-    theme_vanilla() %>%
-    align(align = "center", part = "all") %>%
-    autofit()
+# ###################
+# #
+# # write report
+# #
+# ###################
 
-  mydoc <- mydoc %>%
-    body_add_par('Somatic Mutations in Known Driver Genes', style = 'heading 1') %>%
-    # body_add_fpar(fpar(ftext("Somatic Mutations in Known Driver Genes"), style = "heading 1")) %>%
-    body_add_flextable(value = my_driver_FTable)
-}
+# # write to docx (report)
+# # template_file <- ifelse(debug, system.file('extdata','template_report_en.docx',package = 'ClinicalReportR'), opt$template)
+# mydoc <- officer::read_docx()
 
-# LOF (direct)
-if (nrow(lof_variant_dt_table) > 0) {
-  my_variant_dt_FTable <- flextable::flextable(data = as.data.frame(lof_variant_dt_table)) %>%
-    theme_vanilla() %>%
-    align(align = "center", part = "all") %>%
-    autofit()
+# # Default properties
+# # header_props <- fp_text(font.size = 20, bold = T, color = 'white', shading.color = "orange", font.family = "Verdana")
+# # header_par_props <- fp_par(text.align = "center")
 
-  mydoc <- mydoc %>%
-    body_add_par('Somatic Mutations in Pharmaceutical Target Proteins', style = 'heading 1') %>%
-    body_add_par('Direct Association (Mutation in drug target)', style = 'heading 2') %>%
-    # body_add_fpar(fpar(ftext("Somatic Mutations in Pharmaceutical Target Proteins", prop = header_props))) %>%
-    # body_add_fpar(fpar(ftext("Direct Association (Mutation in drug target)", prop = header_props))) %>%
-    body_add_flextable(value = my_variant_dt_FTable)
-}
+# # DRIVER
+# if (nrow(lof_driver) > 0) {
 
-# LOF CiVIC (indirect)
-if (nrow(lof_civic_dt_table) > 0) {
-  my_civic_dt_FTable = flextable::flextable(data = as.data.frame(lof_civic_dt_table)) %>%
-    theme_vanilla() %>%
-    align(align = "center", part = "all") %>%
-    autofit()
+#   my_driver_FTable = flextable::flextable(data = as.data.frame(lof_driver)) %>%
+#     theme_vanilla() %>%
+#     align(align = "center", part = "all") %>%
+#     autofit()
 
-  mydoc <- mydoc %>%
-    body_add_par('Indirect Association (other Mutations with known effect on drug)', style = 'heading 2') %>%
-    # body_add_fpar(fpar(ftext("Indirect Association (other Mutations with known effect on drug)", prop = header_props))) %>%
-    body_add_flextable(value = my_civic_dt_FTable)
-}
+#   mydoc <- mydoc %>%
+#     body_add_par('Somatic Mutations in Known Driver Genes', style = 'heading 1') %>%
+#     # body_add_fpar(fpar(ftext("Somatic Mutations in Known Driver Genes"), style = "heading 1")) %>%
+#     body_add_flextable(value = my_driver_FTable)
+# }
 
-# CiVIC
-if (nrow(drug_variants) > 0) {
-  my_drug_variants_FTable = flextable::flextable(data = as.data.frame(drug_variants)) %>%
-    theme_vanilla() %>%
-    align(align = "center", part = "all")
+# # LOF (direct)
+# if (nrow(lof_variant_dt_table) > 0) {
+#   my_variant_dt_FTable <- flextable::flextable(data = as.data.frame(lof_variant_dt_table)) %>%
+#     theme_vanilla() %>%
+#     align(align = "center", part = "all") %>%
+#     autofit()
 
-  mydoc <- mydoc %>%
-    body_add_par('Somatic Mutations with known pharmacogenetic effect', style = 'heading 1') %>%
-    # body_add_fpar(fpar(ftext('Somatic Mutations with known pharmacogenetic effect', prop = header_props)), style="centered") %>%
-    body_add_flextable(my_drug_variants_FTable)
-}
+#   mydoc <- mydoc %>%
+#     body_add_par('Somatic Mutations in Pharmaceutical Target Proteins', style = 'heading 1') %>%
+#     body_add_par('Direct Association (Mutation in drug target)', style = 'heading 2') %>%
+#     # body_add_fpar(fpar(ftext("Somatic Mutations in Pharmaceutical Target Proteins", prop = header_props))) %>%
+#     # body_add_fpar(fpar(ftext("Direct Association (Mutation in drug target)", prop = header_props))) %>%
+#     body_add_flextable(value = my_variant_dt_FTable)
+# }
 
-# References
-if (nrow(references) > 0) {
-  #mydoc <- ReporteRs::addPageBreak(mydoc)
+# # LOF CiVIC (indirect)
+# if (nrow(lof_civic_dt_table) > 0) {
+#   my_civic_dt_FTable = flextable::flextable(data = as.data.frame(lof_civic_dt_table)) %>%
+#     theme_vanilla() %>%
+#     align(align = "center", part = "all") %>%
+#     autofit()
 
-  my_references_FTable <- flextable::flextable(data = as.data.frame(references)) %>%
-    theme_vanilla() %>%
-    align(align = "left", part = "all")
+#   mydoc <- mydoc %>%
+#     body_add_par('Indirect Association (other Mutations with known effect on drug)', style = 'heading 2') %>%
+#     # body_add_fpar(fpar(ftext("Indirect Association (other Mutations with known effect on drug)", prop = header_props))) %>%
+#     body_add_flextable(value = my_civic_dt_FTable)
+# }
 
-  mydoc <- mydoc %>%
-    body_add_par('References', style = 'heading 1') %>%
-    body_add_flextable(my_references_FTable)
-}
+# # CiVIC
+# if (nrow(drug_variants) > 0) {
+#   my_drug_variants_FTable = flextable::flextable(data = as.data.frame(drug_variants)) %>%
+#     theme_vanilla() %>%
+#     align(align = "center", part = "all")
 
-if (nrow(mvld) > 0) {
-  appendix <- mvld %>%
-    dplyr::select(Gene = gene_symbol, Mutation, dbSNP, COSMIC)
+#   mydoc <- mydoc %>%
+#     body_add_par('Somatic Mutations with known pharmacogenetic effect', style = 'heading 1') %>%
+#     # body_add_fpar(fpar(ftext('Somatic Mutations with known pharmacogenetic effect', prop = header_props)), style="centered") %>%
+#     body_add_flextable(my_drug_variants_FTable)
+# }
 
-  my_appendix_FTable = flextable::flextable(data = as.data.frame(appendix)) %>%
-    theme_vanilla() %>%
-    align(align = "center", part = "all") %>%
-    autofit()
+# # References
+# if (nrow(references) > 0) {
+#   #mydoc <- ReporteRs::addPageBreak(mydoc)
 
-  mydoc <- mydoc %>%
-    body_add_par('Appendix', style = 'heading 1') %>%
-    # body_add_fpar(fpar(ftext("Appendix", prop = header_props))) %>%
-    body_add_flextable(value = my_appendix_FTable)
-}
+#   my_references_FTable <- flextable::flextable(data = as.data.frame(references)) %>%
+#     theme_vanilla() %>%
+#     align(align = "left", part = "all")
 
-print(mydoc, target = reportFile)
+#   mydoc <- mydoc %>%
+#     body_add_par('References', style = 'heading 1') %>%
+#     body_add_flextable(my_references_FTable)
+# }
+
+# if (nrow(mvld) > 0) {
+#   appendix <- mvld %>%
+#     dplyr::select(Gene = gene_symbol, Mutation, dbSNP, COSMIC)
+
+#   my_appendix_FTable = flextable::flextable(data = as.data.frame(appendix)) %>%
+#     theme_vanilla() %>%
+#     align(align = "center", part = "all") %>%
+#     autofit()
+
+#   mydoc <- mydoc %>%
+#     body_add_par('Appendix', style = 'heading 1') %>%
+#     # body_add_fpar(fpar(ftext("Appendix", prop = header_props))) %>%
+#     body_add_flextable(value = my_appendix_FTable)
+# }
+
+# print(mydoc, target = reportFile)
