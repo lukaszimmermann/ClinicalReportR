@@ -1,6 +1,7 @@
 package de.ekut.wsi.abi.clinicalreporting.generator.model.docx4j;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
@@ -367,14 +368,14 @@ public final class DocumentGenerator {
 		pkg.getMainDocumentPart().addObject(paragraph);
 	}
 
-	
+
 	private void createSingleObservationTable(
 			final DocumentSingleObservationTable table,
 			final WordprocessingMLPackage pkg)	{
-	
+
 		final Observation observation = table.getObservation();
 		final List<String> keys = DocumentTree.order(observation.getKeys());
-		
+
 		addHeader(table.getTitle(), pkg);
 
 		final Tbl tbl = objectFactory.createTbl();
@@ -396,7 +397,7 @@ public final class DocumentGenerator {
 
 		for (final String key: keys) {
 			tableRow = objectFactory.createTr();
-			
+
 			addTableCell(tableRow, key, 2000, defStyle, 1, null);
 			addTableCell(tableRow, observation.getAttribute(key), 2000, defStyle, 1, null);
 			tbl.getContent().add(tableRow);
@@ -405,8 +406,8 @@ public final class DocumentGenerator {
 		pkg.getMainDocumentPart().addObject(tbl);
 		pkg.getMainDocumentPart().addParagraphOfText("");
 	}
-	
-	
+
+
 
 	private void createMultiObservationReportTable(
 			final DocumentMultiObservationTable table,
@@ -414,8 +415,24 @@ public final class DocumentGenerator {
 
 		final ObservationContainer container = table.getObservationContainer();
 		final ObservationSchema schema = container.getSchema();
-		final String[] keys = schema.getKeys();
+		final List<String> keys = new ArrayList<String>();
 
+		// TODO HardCoded. Remove the rowid key
+		int index = -1;
+		final String[] schemaKeys = schema.getKeys();
+
+		for (int i = 0; i < schemaKeys.length; ++i) {
+
+			final String key = schemaKeys[i];
+			if ( ! "rowid".equals(key)) {
+
+				keys.add(key);
+				
+			} else {
+				
+				index = i;
+			}
+		}
 
 		addHeader(table.getTitle(), pkg);
 
@@ -458,8 +475,12 @@ public final class DocumentGenerator {
 
 		for (final String[] row : container.getRawObservations()) {
 			tableRow = objectFactory.createTr();
-			for (String cell : row) {
-				addTableCell(tableRow, cell, 2000, defStyle, 1, null);
+
+			for (int i = 0; i < row.length; ++i) {
+				if (i != index) {
+
+					addTableCell(tableRow, row[i], 2000, defStyle, 1, null);
+				}
 			}
 			// addTableCell(tableRow, row.get(1), 3200, defStyle, 1, null);
 			// addTableCell(tableRow, row.get(2), 2100, defStyle, 1, null);
@@ -484,7 +505,7 @@ public final class DocumentGenerator {
 				this.createMultiObservationReportTable((DocumentMultiObservationTable) node, pkg);
 			}
 			else if (node instanceof DocumentSingleObservationTable) {
-				
+
 				this.createSingleObservationTable((DocumentSingleObservationTable) node, pkg);
 			}
 		}
