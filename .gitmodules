@@ -1,0 +1,3 @@
+[submodule "docxtemplater"]
+	path = docxtemplater
+	url = https://github.com/lukaszimmermann/clinicalreporting_docxtemplater.git
