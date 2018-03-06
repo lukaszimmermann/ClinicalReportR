@@ -15,14 +15,18 @@ RUN sh -c 'echo "deb http://cran.rstudio.com/bin/linux/ubuntu xenial/" >> /etc/a
   gpg -a --export E084DAB9 | apt-key add -
 
 RUN apt-get -y update && \
-  apt-get install -y r-base libxml2-dev libcurl4-openssl-dev libssh2-1-dev libcairo2-dev samtools libpq-dev
+  apt-get install -y r-base libxml2-dev libcurl4-openssl-dev libssh2-1-dev libcairo2-dev samtools libpq-dev nodejs npm
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # install R packages
-RUN Rscript -e 'install.packages(c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "flextable", "optparse", "readr", "RCurl", "devtools"), dependencies = TRUE, repos = "https://cloud.r-project.org")'
+RUN Rscript -e 'install.packages(c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "flextable", "optparse", "readr", "RCurl", "devtools", "log4r"), dependencies = TRUE, repos = "https://cloud.r-project.org")'
 RUN Rscript -e 'devtools::install_github("jeremystan/tidyjson")'
 RUN Rscript -e 'devtools::install_github("davidgohel/officer")'
 RUN Rscript -e 'source("https://bioconductor.org/biocLite.R"); biocLite(c("VariantAnnotation", "rjson"), ask = FALSE, suppressUpdates = TRUE)'
+
+# installation of modules for nodejs
+WORKDIR /data/docxtemplater
+RUN npm install
 
 # Although LoF is installed via VEP's install script above, it's unclear which version.
 # To be sure, we overwrite it with the latest release on github

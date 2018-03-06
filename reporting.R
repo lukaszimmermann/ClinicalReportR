@@ -37,7 +37,7 @@ if (!debug && (is.null(opt$file) || !file.exists(opt$file))) {
 #  stop("Please supply a valid input file")
 } else {
   log4r::level(logger) <- 'INFO'
-  messages = paste(vcfFile, "is provided as input file")
+  messages = paste(opt$file, "is provided as input file")
   log4r::info(logger, messages)
 }
 
@@ -416,8 +416,10 @@ if (nrow(drug_variants)) {
 
 ########################### Converting dataframes to json format (only applied to tables that are printed in report).
 # Create an empty json object of patient data 
-patient_info <- list(Name = "", Birthdate = "", Diagnosis = "" )
-patient_info_json <- jsonlite::toJSON(patient_info, prety = TRUE, auto_unbox = TRUE)
+# patient_info <- list(patient_firstname = "", patient_lastname = "", patient_dateofbirth = "", patient_diagnosis_short="", mutation_load="", mutation_ns_snv="", mutation_affected_oncogenes="", mutation_affected_tumorsupressorgenes="", mutation_hla_type="", mutation_additional_information="" )
+# patient_info_json <- jsonlite::toJSON(patient_info, prety = TRUE, auto_unbox = TRUE)
+
+patient_info <- paste0('"patient_firstname"',":",'"",',"\n",'"patient_lastname"',":",'"",',"\n",'"patient_dateofbirth"',":", '"",',"\n",'"patient_diagnosis_short"',":", '"",',"\n",'"mutation_load"',":", '"",',"\n",'"mutation_ns_snv"',":", '"",',"\n",'"mutation_affected_oncogenes"',":",'"",',"\n",'"mutation_affected_tumorsupressorgenes"',":", '"",',"\n",'"mutation_hla_type"',":", '"",',"\n",'"mutation_additional_information"',":",'""')
 
 lof_driver_json <- jsonlite::toJSON(lof_driver , dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
 lof_variant_dt_table_direct_json <- jsonlite::toJSON(lof_variant_dt_table , dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
@@ -427,7 +429,7 @@ references_table_json <- jsonlite::toJSON(references, dataframe = c("rows"), mat
 appendix_table_json <- jsonlite::toJSON(appendix, dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
 
 # Merge tables into one 'report' json.
-report <- paste0('{"Patient Data":',patient_info_json, ',',"\n", '"Somatic Mutations in Known Driver Genes":',lof_driver_json,',',"\n", '"Somatic Mutations in Pharmaceutical Target Proteins":{',"\n",'"Direct Association (Mutation in drug target)":',lof_variant_dt_table_direct_json,',',"\n",'"Indirect Association (other Mutations with known effect on drug)":',lof_civic_dt_table_indirect_json,"\n" ,'}', ',',"\n", '"Somatic Mutations with known pharmacogenetic effect":',drug_variants_json,',',"\n",'"References":',references_table_json,',',"\n",'"Appendix":',appendix_table_json ,"\n",'}')
+report <- paste0("{","\n", patient_info_json, ',',"\n", '"mskdg":',lof_driver_json,',',"\n", '"ptp_da":',lof_variant_dt_table_direct_json,',',"\n",'"ptp_ia":',lof_civic_dt_table_indirect_json, ',',"\n", '"mskpe":',drug_variants_json,',',"\n",'"ref":',references_table_json,',',"\n",'"appendix":',appendix_table_json ,"\n",'}')
 writeLines(report,"report.json")
 
 # ###################
