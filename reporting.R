@@ -152,7 +152,7 @@ mvld <- location %>%
   mutate(Consequence = stringr::str_replace_all(stringr::str_extract(Consequence, "^(?:(?!_variant)\\w)*"), "_", " "),
   #       reference_build = "GRCh37",
          hgnc_id = as.integer(HGNC_ID),
-         dbSNP = as.character(stringr::str_extract_all(Existing_variation, "rs\\w+")),
+         dbSNP = stringr::str_extract_all(Existing_variation, "rs\\w+"),
          COSMIC = stringr::str_extract_all(Existing_variation, "COSM\\w+"),
          DNA = stringr::str_extract(HGVSc, "(?<=:).*"),
          Protein = stringr::str_extract(HGVSp, "(?<=:).*")) %>% # positive lookbehind
@@ -429,103 +429,5 @@ references_table_json <- jsonlite::toJSON(references, dataframe = c("rows"), mat
 appendix_table_json <- jsonlite::toJSON(appendix, dataframe = c("rows"), matrix = c("columnmajor"), pretty = TRUE)
 
 # Merge tables into one 'report' json.
-report <- paste0("{","\n", patient_info_json, ',',"\n", '"mskdg":',lof_driver_json,',',"\n", '"ptp_da":',lof_variant_dt_table_direct_json,',',"\n",'"ptp_ia":',lof_civic_dt_table_indirect_json, ',',"\n", '"mskpe":',drug_variants_json,',',"\n",'"ref":',references_table_json,',',"\n",'"appendix":',appendix_table_json ,"\n",'}')
+report <- paste0("{","\n", patient_info, ',',"\n", '"mskdg":',lof_driver_json,',',"\n", '"ptp_da":',lof_variant_dt_table_direct_json,',',"\n",'"ptp_ia":',lof_civic_dt_table_indirect_json, ',',"\n", '"mskpe":',drug_variants_json,',',"\n",'"ref":',references_table_json,',',"\n",'"appendix":',appendix_table_json ,"\n",'}')
 writeLines(report,"report.json")
-
-# ###################
-# #
-# # write report
-# #
-# ###################
-
-# # write to docx (report)
-# # template_file <- ifelse(debug, system.file('extdata','template_report_en.docx',package = 'ClinicalReportR'), opt$template)
-# mydoc <- officer::read_docx()
-
-# # Default properties
-# # header_props <- fp_text(font.size = 20, bold = T, color = 'white', shading.color = "orange", font.family = "Verdana")
-# # header_par_props <- fp_par(text.align = "center")
-
-# # DRIVER
-# if (nrow(lof_driver) > 0) {
-
-#   my_driver_FTable = flextable::flextable(data = as.data.frame(lof_driver)) %>%
-#     theme_vanilla() %>%
-#     align(align = "center", part = "all") %>%
-#     autofit()
-
-#   mydoc <- mydoc %>%
-#     body_add_par('Somatic Mutations in Known Driver Genes', style = 'heading 1') %>%
-#     # body_add_fpar(fpar(ftext("Somatic Mutations in Known Driver Genes"), style = "heading 1")) %>%
-#     body_add_flextable(value = my_driver_FTable)
-# }
-
-# # LOF (direct)
-# if (nrow(lof_variant_dt_table) > 0) {
-#   my_variant_dt_FTable <- flextable::flextable(data = as.data.frame(lof_variant_dt_table)) %>%
-#     theme_vanilla() %>%
-#     align(align = "center", part = "all") %>%
-#     autofit()
-
-#   mydoc <- mydoc %>%
-#     body_add_par('Somatic Mutations in Pharmaceutical Target Proteins', style = 'heading 1') %>%
-#     body_add_par('Direct Association (Mutation in drug target)', style = 'heading 2') %>%
-#     # body_add_fpar(fpar(ftext("Somatic Mutations in Pharmaceutical Target Proteins", prop = header_props))) %>%
-#     # body_add_fpar(fpar(ftext("Direct Association (Mutation in drug target)", prop = header_props))) %>%
-#     body_add_flextable(value = my_variant_dt_FTable)
-# }
-
-# # LOF CiVIC (indirect)
-# if (nrow(lof_civic_dt_table) > 0) {
-#   my_civic_dt_FTable = flextable::flextable(data = as.data.frame(lof_civic_dt_table)) %>%
-#     theme_vanilla() %>%
-#     align(align = "center", part = "all") %>%
-#     autofit()
-
-#   mydoc <- mydoc %>%
-#     body_add_par('Indirect Association (other Mutations with known effect on drug)', style = 'heading 2') %>%
-#     # body_add_fpar(fpar(ftext("Indirect Association (other Mutations with known effect on drug)", prop = header_props))) %>%
-#     body_add_flextable(value = my_civic_dt_FTable)
-# }
-
-# # CiVIC
-# if (nrow(drug_variants) > 0) {
-#   my_drug_variants_FTable = flextable::flextable(data = as.data.frame(drug_variants)) %>%
-#     theme_vanilla() %>%
-#     align(align = "center", part = "all")
-
-#   mydoc <- mydoc %>%
-#     body_add_par('Somatic Mutations with known pharmacogenetic effect', style = 'heading 1') %>%
-#     # body_add_fpar(fpar(ftext('Somatic Mutations with known pharmacogenetic effect', prop = header_props)), style="centered") %>%
-#     body_add_flextable(my_drug_variants_FTable)
-# }
-
-# # References
-# if (nrow(references) > 0) {
-#   #mydoc <- ReporteRs::addPageBreak(mydoc)
-
-#   my_references_FTable <- flextable::flextable(data = as.data.frame(references)) %>%
-#     theme_vanilla() %>%
-#     align(align = "left", part = "all")
-
-#   mydoc <- mydoc %>%
-#     body_add_par('References', style = 'heading 1') %>%
-#     body_add_flextable(my_references_FTable)
-# }
-
-# if (nrow(mvld) > 0) {
-#   appendix <- mvld %>%
-#     dplyr::select(Gene = gene_symbol, Mutation, dbSNP, COSMIC)
-
-#   my_appendix_FTable = flextable::flextable(data = as.data.frame(appendix)) %>%
-#     theme_vanilla() %>%
-#     align(align = "center", part = "all") %>%
-#     autofit()
-
-#   mydoc <- mydoc %>%
-#     body_add_par('Appendix', style = 'heading 1') %>%
-#     # body_add_fpar(fpar(ftext("Appendix", prop = header_props))) %>%
-#     body_add_flextable(value = my_appendix_FTable)
-# }
-
-# print(mydoc, target = reportFile)
