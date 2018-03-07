@@ -24,10 +24,6 @@ RUN Rscript -e 'devtools::install_github("jeremystan/tidyjson")'
 RUN Rscript -e 'devtools::install_github("davidgohel/officer")'
 RUN Rscript -e 'source("https://bioconductor.org/biocLite.R"); biocLite(c("VariantAnnotation", "rjson"), ask = FALSE, suppressUpdates = TRUE)'
 
-# installation of modules for nodejs
-WORKDIR /data/docxtemplater
-RUN npm install
-
 # Although LoF is installed via VEP's install script above, it's unclear which version.
 # To be sure, we overwrite it with the latest release on github
 WORKDIR /home/vep
