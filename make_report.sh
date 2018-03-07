@@ -17,5 +17,10 @@ cp report.json /data
 
 # create report
 echo "################ Start to create report ################"
-nodejs /data/docxtemplater/main.js -d report.json -t /data/docxtemplater/data/template.docx -o /data/out.docx && \
+nodejs /data/clinicalreporting_docxtemplater/main.js -d report.json -t /data/clinicalreporting_docxtemplater/data/template.docx -o /data/out.docx && \
 echo "################ Report is created  ################"
+
+# convert it to pdf
+echo "################ Start to create pdf ################"
+libreoffice --headless --convert-to pdf out.docx && \
+echo "################ pdf is created  ################"
