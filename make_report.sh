@@ -1,5 +1,5 @@
 #!/bin/bash
-
+CPWD=$(pwd)
 infile=$1
 outfile=$infile.out.vcf
 
@@ -16,11 +16,16 @@ cp base.log /data
 cp report.json /data
 
 # create report
+cd /data/clinicalreporting_docxtemplater && \
+npm install && \
+cd $CPWD
+
 echo "################ Start to create report ################"
 nodejs /data/clinicalreporting_docxtemplater/main.js -d report.json -t /data/clinicalreporting_docxtemplater/data/template.docx -o /data/out.docx && \
 echo "################ Report is created  ################"
 
 # convert it to pdf
 echo "################ Start to create pdf ################"
-libreoffice --headless --convert-to pdf out.docx && \
+libreoffice --headless --convert-to pdf /data/out.docx && \
+cp out.pdf /data
 echo "################ pdf is created  ################"
