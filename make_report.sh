@@ -16,9 +16,9 @@ cp base.log /data
 cp report.json /data
 
 # create report
-cd /data/clinicalreporting_docxtemplater && \
-npm install && \
-cd $CPWD
+# cd /data/clinicalreporting_docxtemplater && \
+# npm install && \
+# cd $CPWD
 
 echo "################ Start to create report ################"
 nodejs /data/clinicalreporting_docxtemplater/main.js -d report.json -t /data/clinicalreporting_docxtemplater/data/template.docx -o /data/out.docx && \
