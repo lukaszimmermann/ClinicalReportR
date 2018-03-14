@@ -102,6 +102,7 @@ civic_evidence <- read.table(civic_source, sep="\t", header=T, fill = T, quote =
   dplyr::rename(chr=chromosome, alt=variant_bases, ref=reference_bases) %>%
   dplyr::mutate(gene = as.character(gene),
                   chr = as.character (chr),
+                  start = as.integer(start),
                   ref = as.character(ref),
                   alt = as.character(alt)) %>%
   filter(evidence_status == "accepted") %>%
