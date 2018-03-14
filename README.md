@@ -37,8 +37,13 @@ This will download cache files into `$CLINICALREPORTR`, e.g. the directory you c
 
 ```
 9. cd ../clinicalReporting_DB_RESTAPI
-10. docker-compose build && docker-compose run --service-ports ClinicalReportR /data/<VCF FILE>
+10. docker-compose build && docker-compose run --service-ports ClinicalReportR -t /data/<VCF FILE> -p jwp
 
 ```
+* `-t`: input file name. This should be in the data volume of ClinicalReportR service.
+* `-p`: output format to save the results.
+	* `j` to save report in JSON format
+	* `w` to save report in DOCX format
+	* `p` to save report in PDF format
 
 You should now have the report in ClinicalReportR folder.
