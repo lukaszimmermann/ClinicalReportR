@@ -21,6 +21,7 @@ services:
 
     ClinicalReportR: 
       image: report
+      build: ./ReportApp
       volumes:
         - ./ReportApp:/data
       network_mode: "host"
