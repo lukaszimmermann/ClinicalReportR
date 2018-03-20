@@ -22,7 +22,7 @@ services:
     ClinicalReportR: 
       image: report
       volumes:
-        - /ReportApp:/data
+        - ./ReportApp:/data
       network_mode: "host"
       depends_on:
         - api
