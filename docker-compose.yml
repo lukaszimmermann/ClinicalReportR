@@ -37,6 +37,5 @@ services:
         - filedeploy
       # stdin_open: true
       # tty: true
-
 volumes:
   dependencyF:
