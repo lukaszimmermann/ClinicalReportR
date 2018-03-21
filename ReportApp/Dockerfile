@@ -42,9 +42,13 @@ ENV PERL5LIB /home/vep/loftee-0.3-beta/:$PERL5LIB
 COPY vep_docker.ini /home/vep/.vep/vep.ini
 COPY make_report.sh /home/vep/
 COPY reporting.R /home/vep
-COPY clinicalreporting_docxtemplater /home/vep
+RUN mkdir clinicalreporting_docxtemplater
+COPY clinicalreporting_docxtemplater /home/vep/clinicalreporting_docxtemplater
+
+WORKDIR /home/vep/clinicalreporting_docxtemplater
 RUN npm install
 
+WORKDIR /home/vep
 #RUN chmod +x /home/vep/make_report.sh /home/vep/reporting.R
 #CMD /home/vep/make_report.sh
 RUN chmod +x /home/vep/make_report.sh /home/vep/reporting.R
