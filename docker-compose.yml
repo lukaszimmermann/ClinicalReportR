@@ -19,14 +19,24 @@ services:
       depends_on:
         - mongodb
 
-    ClinicalReportR: 
-      image: report
+    filedeploy:
+      image: bilges/filedeploy
       volumes:
-        - /ReportApp:/data
+        - dependencyF:/mnt
+
+    ClinicalReportR: 
+      image: bilges/clinicalreportr
+      volumes:
+        - dependencyF:/data
+        - ./ReportApp:/inout
       network_mode: "host"
       depends_on:
         - api
         - mongodb
         - mongo-seed
+        - filedeploy
       # stdin_open: true
       # tty: true
+
+volumes:
+  dependencyF:
