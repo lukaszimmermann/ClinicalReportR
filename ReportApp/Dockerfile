@@ -1,5 +1,7 @@
 FROM ensemblorg/ensembl-vep:latest
 
+LABEL maintainer="sueruen@informatik.uni-tuebingen.de"
+
 # update vep, install and configure required vep plugins
 USER vep
 WORKDIR $HOME/src/ensembl-vep
@@ -51,5 +53,5 @@ RUN npm install
 WORKDIR /home/vep
 #RUN chmod +x /home/vep/make_report.sh /home/vep/reporting.R
 #CMD /home/vep/make_report.sh
-RUN chmod +x /home/vep/make_report.sh /home/vep/reporting.R
+RUN chmod +x make_report.sh reporting.R
 ENTRYPOINT ["/home/vep/make_report.sh"]

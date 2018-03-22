@@ -1,6 +1,5 @@
 #!/bin/bash
-while [ ! -f /data/completeness.flag ];
-do 
+while [ ! -f /data/completeness.flag ]; do 
 sleep 30
 done
 
@@ -18,36 +17,38 @@ shift "$((OPTIND-1))"
 CPWD=$(pwd)
 
 # outfile=$infile.out.vcf
+outfilename=$(basename "$infile")
+outname="${outfilename%.*}"
 
 # annotate file
 echo "################ Starting variant effect prediction ################"
-vep -i $infile -o $infile.out.vcf && \
+vep -i $infile -o $outname.vcf && \
 echo "################ $outfile is created. ################"
 
 # create json
 echo "################ Start to create json ################"
-Rscript /home/vep/reporting.R -f $infile.out.vcf  && \
+Rscript /home/vep/reporting.R -f $outname.vcf -r $outname.json && \
 echo "################ JSON is created  ################"
 cp base.log /inout
 
 if [[ $savedOut == *"j"* ]]; then
-    cp report.json /inout
+    cp $outname.json /inout
     echo "JSON is saved to the volume"
 fi
 
 echo "################ Start to create report ################"
-nodejs /home/vep/clinicalreporting_docxtemplater/main.js -d report.json -t /home/vep/clinicalreporting_docxtemplater/data/template.docx -o out.docx && \
+nodejs /home/vep/clinicalreporting_docxtemplater/main.js -d $outname.json -t /home/vep/clinicalreporting_docxtemplater/data/template.docx -o $outname.docx && \
 echo "################ Report is created  ################"
 if [[ $savedOut == *"w"* ]]; then
-    cp out.docx /inout
+    cp $outname.docx  /inout
     echo "Report is saved to the volume as DOCX file."
 fi
 
     # convert it to pdf
 if [[ $savedOut == *"p"* ]]; then
     echo "################ Start to create pdf ################"
-    libreoffice --headless --convert-to pdf /inout/out.docx && \
+    libreoffice --headless --convert-to pdf /inout/$outname.docx  && \
     echo "################ pdf is created  ################"
-    cp out.pdf /inout && \
+    cp $outname.pdf /inout && \
     echo "Report is saved to the volume as PDF file."
 fi
