@@ -431,4 +431,4 @@ appendix_table_json <- jsonlite::toJSON(appendix, dataframe = c("rows"), matrix 
 
 # Merge tables into one 'report' json.
 report <- paste0("{","\n", patient_info, ',',"\n", '"mskdg":',lof_driver_json,',',"\n", '"ptp_da":',lof_variant_dt_table_direct_json,',',"\n",'"ptp_ia":',lof_civic_dt_table_indirect_json, ',',"\n", '"mskpe":',drug_variants_json,',',"\n",'"ref":',references_table_json,',',"\n",'"appendix":',appendix_table_json ,"\n",'}')
-writeLines(report,"report.json")
+writeLines(report, reportFile)
