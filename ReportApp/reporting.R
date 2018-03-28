@@ -103,6 +103,7 @@ civic_evidence <- read.table(civic_source, sep="\t", header=T, fill = T, quote =
   dplyr::mutate(gene = as.character(gene),
                   chr = as.character (chr),
                   start = as.integer(start),
+                  stop = as.integer(stop),
                   ref = as.character(ref),
                   alt = as.character(alt)) %>%
   filter(evidence_status == "accepted") %>%
