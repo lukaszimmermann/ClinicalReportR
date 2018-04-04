@@ -7,7 +7,7 @@ From: ensemblorg/ensembl-vep:latest
     exec echo "Hello Monsoir Meatball" "$@"
 
 %environment
-  PERL5LIB=/home/vep/loftee-0.3-beta/:/home/vep/src/bioperl-live-release-1-6-924
+  PERL5LIB=/home/vep/loftee-0.3-beta:/home/vep/src/bioperl-live-release-1-6-924
   export PERL5LIB
 
 %files
@@ -49,7 +49,7 @@ cd /data
 wget https://raw.githubusercontent.com/PersonalizedOncology/clinicalReporting_DB_RESTAPI/master/mongo-seed/driver_db_dump.json
 
 mongoimport \
-  --host mongodb \
+  --host localhost \
   --db clinical_reporting \
   --collection biograph_genes \
   --jsonArray \
