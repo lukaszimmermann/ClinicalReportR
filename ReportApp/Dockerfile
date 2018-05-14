@@ -4,7 +4,7 @@ LABEL maintainer="sueruen@informatik.uni-tuebingen.de"
 
 # update vep, install and configure required vep plugins
 USER vep
-WORKDIR $HOME/src/ensembl-vep
+WORKDIR $OPT/src/ensembl-vep
 RUN git pull && \
   git checkout release/91 && \
   ./INSTALL.pl -a p -g LoFtool
@@ -28,7 +28,7 @@ RUN Rscript -e 'source("https://bioconductor.org/biocLite.R"); biocLite(c("Varia
 
 # Although LoF is installed via VEP's install script above, it's unclear which version.
 # To be sure, we overwrite it with the latest release on github
-WORKDIR /home/vep
+WORKDIR /opt/vep
 USER vep
 RUN wget https://github.com/konradjk/loftee/archive/v0.3-beta.zip && \
   unzip v0.3-beta.zip && \
@@ -41,17 +41,17 @@ RUN cpanm DBD::SQLite
 ENV PERL5LIB /home/vep/loftee-0.3-beta/:$PERL5LIB
 
 # copy configuration files
-COPY vep_docker.ini /home/vep/.vep/vep.ini
-COPY make_report.sh /home/vep/
-COPY reporting.R /home/vep
+COPY vep_docker.ini /opt/vep/.vep/vep.ini
+COPY make_report.sh /opt/vep/
+COPY reporting.R /opt/vep
 RUN mkdir clinicalreporting_docxtemplater
-COPY clinicalreporting_docxtemplater /home/vep/clinicalreporting_docxtemplater
+COPY clinicalreporting_docxtemplater /opt/vep/clinicalreporting_docxtemplater
 
-WORKDIR /home/vep/clinicalreporting_docxtemplater
+WORKDIR /opt/vep/clinicalreporting_docxtemplater
 RUN npm install
 
-WORKDIR /home/vep
+WORKDIR /opt/vep
 #RUN chmod +x /home/vep/make_report.sh /home/vep/reporting.R
 #CMD /home/vep/make_report.sh
 RUN chmod +x make_report.sh reporting.R
-ENTRYPOINT ["/home/vep/make_report.sh"]
+ENTRYPOINT ["/opt/vep/make_report.sh"]
