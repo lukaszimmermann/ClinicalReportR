@@ -6,7 +6,7 @@ LABEL maintainer="sueruen@informatik.uni-tuebingen.de"
 USER vep
 WORKDIR $OPT/src/ensembl-vep
 RUN git pull && \
-  git checkout release/91 && \
+  git checkout release/92 && \
   ./INSTALL.pl -a p -g LoFtool
 
 USER root
