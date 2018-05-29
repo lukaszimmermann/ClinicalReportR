@@ -22,7 +22,7 @@ outname="${outfilename%.*}"
 
 # annotate file
 echo "################ Starting variant effect prediction ################"
-vep -i $infile -o $outname.vcf && \
+vep -i $infile -o $outname.vcf --config /opt/vep/.vep/vep.ini && \
 echo "################ $outfile is created. ################"
 
 # create json

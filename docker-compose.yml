@@ -20,22 +20,23 @@ services:
         - mongodb
 
     filedeploy:
-      image: bilges/filedeploy
+      image: bilges/filedeploy:92
       volumes:
         - dependencyF:/mnt
 
     ClinicalReportR: 
-      image: bilges/clinicalreportr
+      image: clinicalreport:92.2
       volumes:
         - dependencyF:/data
         - ./ReportApp:/inout
+      entrypoint: /bin/bash
       network_mode: "host"
       depends_on:
         - api
         - mongodb
         - mongo-seed
         - filedeploy
-      # stdin_open: true
-      # tty: true
+      #stdin_open: true
+      #tty: true
 volumes:
   dependencyF:
