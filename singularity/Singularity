@@ -7,20 +7,11 @@ From: ensemblorg/ensembl-vep:latest
     exec echo "Hello Monsoir Meatball" "$@"
 
 %environment
-  PERL5LIB=/opt/vep/loftee-0.3-beta:/opt/vep/src/bioperl-live-release-1-6-924
-  export PERL5LIB
-
-  VEP_BASEDIR=/opt/vep
-  export VEP_BASEDIR
-
-  DATA_DIR=/data
-  export DATA_DIR
-
-  TEMP_DIR=/tmp
-  export TEMP_DIR
-
-  REST_API_DIR=/api
-  export REST_API_DIR
+  export PERL5LIB=/opt/vep/loftee-0.3-beta:/opt/vep/src/bioperl-live-release-1-6-924
+  export VEP_BASEDIR=/opt/vep
+  export DATA_DIR=/data
+  export TEMP_DIR=/tmp
+  export REST_API_DIR=/api
 
 %files
 settings.py
