@@ -62,20 +62,21 @@ cd ${TEMP_DIR}
 echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-3.6.list
 apt-get update -y
 apt-get install -y mongodb-org
-mkdir -p /data/db
+mkdir -p ${DATA_DIR}/db
 mongod --fork --logpath /mongolog
 
 ########################################################################
 # Download and import the MongoDB seed
 ########################################################################
 cd ${DATA_DIR}
-wget https://raw.githubusercontent.com/PersonalizedOncology/clinicalReporting_DB_RESTAPI/master/mongo-seed/driver_db_dump.json
+wget -O ${DATA_DIR}/driver_db_dump.json \
+  https://raw.githubusercontent.com/PersonalizedOncology/clinicalReporting_DB_RESTAPI/master/mongo-seed/driver_db_dump.json
 mongoimport \
   --host localhost \
   --db clinical_reporting \
   --collection biograph_genes \
   --jsonArray \
-  --file /data/driver_db_dump.json \
+  --file ${DATA_DIR}/driver_db_dump.json \
   --drop
 
   ########################################################################
@@ -108,7 +109,8 @@ git checkout release/92
 # Although LoF is installed via VEP's install script above, it's unclear
 # which version. To be sure, we overwrite it with the latest release on github
 cd ${TEMP_DIR}
-wget https://github.com/konradjk/loftee/archive/v0.3-beta.zip
+wget -O ${TEMP_DIR}/v0.3-beta.zip \
+   https://github.com/konradjk/loftee/archive/v0.3-beta.zip
 unzip v0.3-beta.zip
 rm v0.3-beta.zip
 cp loftee-0.3-beta/LoF.pm ${VEP_BASEDIR}/.vep/Plugins
@@ -117,10 +119,14 @@ cp loftee-0.3-beta/LoF.pm ${VEP_BASEDIR}/.vep/Plugins
 # Assemble the data directory
 ########################################################################
 cd ${DATA_DIR}
-wget http://www.broadinstitute.org/~konradk/loftee/human_ancestor.fa.rz
-wget http://www.broadinstitute.org/~konradk/loftee/human_ancestor.fa.rz.fai
-wget https://raw.githubusercontent.com/Ensembl/VEP_plugins/release/90/LoFtool_scores.txt
-wget https://www.broadinstitute.org/%7Ekonradk/loftee/phylocsf.sql.gz
+wget -O ${DATA_DIR}/human_ancestor.fa.rz \
+ http://www.broadinstitute.org/~konradk/loftee/human_ancestor.fa.rz
+wget -O ${DATA_DIR}/human_ancestor.fa.rz.fai \
+ http://www.broadinstitute.org/~konradk/loftee/human_ancestor.fa.rz.fai
+wget -O ${DATA_DIR}/LoFtool_scores.txt \
+  https://raw.githubusercontent.com/Ensembl/VEP_plugins/release/90/LoFtool_scores.txt
+wget -O ${DATA_DIR}/phylocsf.sql.gz \
+  https://www.broadinstitute.org/%7Ekonradk/loftee/phylocsf.sql.gz
 gunzip phylocsf.sql.gz
 
 # Move the homo sapiens stuff to the data dir
