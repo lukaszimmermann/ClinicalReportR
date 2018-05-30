@@ -1,6 +1,11 @@
 Bootstrap: docker
 From: ensemblorg/ensembl-vep:latest
 
+%labels
+    Maintainer Lukas Zimmermann
+    Version v1.0
+
+
 %runscript
 
     echo "I can put here whatever I want to happen when the user runs my container!"
@@ -151,3 +156,15 @@ mv /reporting.R ${VEP_BASEDIR}
 chown -R vep:vep ${VEP_BASEDIR}
 chmod +x ${VEP_BASEDIR}/make_report.sh
 chmod +x ${VEP_BASEDIR}/reporting.R
+
+########################################################################
+# Cleanup
+########################################################################
+rm -rf /tmp/* /var/tmp/*
+
+%test
+
+  # Test the existence of certain files
+  stat ${VEP_BASEDIR}/make_report.sh
+  stat ${VEP_BASEDIR}/reporting.R
+  stat ${VEP_BASEDIR}/.vep/vep.ini
