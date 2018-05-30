@@ -5,18 +5,13 @@ From: ensemblorg/ensembl-vep:latest
     Maintainer Lukas Zimmermann
     Version v1.0
 
-
 %runscript
 
     echo "I can put here whatever I want to happen when the user runs my container!"
     exec echo "Hello Monsoir Meatball" "$@"
 
 %environment
-  export PERL5LIB=/opt/vep/loftee-0.3-beta:/opt/vep/src/bioperl-live-release-1-6-924
-  export VEP_BASEDIR=/opt/vep
-  export DATA_DIR=/data
-  export TEMP_DIR=/tmp
-  export REST_API_DIR=/api
+export PERL5LIB=/opt/vep/loftee-0.3-beta:/opt/vep/src/bioperl-live-release-1-6-924
 
 %files
 settings.py
@@ -27,11 +22,22 @@ reporting.R
 
 %post
 ########################################################################
+# Define environment variables
+########################################################################
+export TEMP_DIR=/tmp
+export PERL5LIB=/opt/vep/loftee-0.3-beta:/opt/vep/src/bioperl-live-release-1-6-924
+export VEP_BASEDIR=/opt/vep
+export DATA_DIR=/data
+export REST_API_DIR=/api
+export LOG_BUILD_DIR=/buildlogs
+########################################################################
 # Install all the required packages for the clinical Reporting pipeline
 ########################################################################
 cd ${TEMP_DIR}
 apt-get update -y
 apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5
+apt-get update -y
+apt-get install -y apt-utils
 apt-get install -y \
   apt-transport-https \
   libcairo2-dev \
@@ -48,6 +54,12 @@ apt-get install -y \
   r-base \
   samtools
 
+  ########################################################################
+  # For buildlogs
+  ########################################################################
+  cd ${TEMP_DIR}
+  mkdir -p ${LOG_BUILD_DIR}
+
 ########################################################################
 # Set the locale
 ########################################################################
@@ -63,7 +75,6 @@ echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongod
 apt-get update -y
 apt-get install -y mongodb-org
 mkdir -p ${DATA_DIR}/db
-mongod --fork --logpath /mongolog
 
 ########################################################################
 # Download and import the MongoDB seed
@@ -77,7 +88,7 @@ mongoimport \
   --collection biograph_genes \
   --jsonArray \
   --file ${DATA_DIR}/driver_db_dump.json \
-  --drop
+  --drop > ${LOG_BUILD_DIR}/mongoimport 2>&1
 
   ########################################################################
   # Install R
@@ -157,7 +168,7 @@ mv /make_report.sh ${VEP_BASEDIR}
 mv /reporting.R ${VEP_BASEDIR}
 
 ########################################################################
-# Correct all permissions ans set scripts executanl
+# Correct all permissions and set scripts executable
 ########################################################################
 chown -R vep:vep ${VEP_BASEDIR}
 chmod +x ${VEP_BASEDIR}/make_report.sh
@@ -169,8 +180,10 @@ chmod +x ${VEP_BASEDIR}/reporting.R
 rm -rf /tmp/* /var/tmp/*
 
 %test
-
   # Test the existence of certain files
   stat ${VEP_BASEDIR}/make_report.sh
   stat ${VEP_BASEDIR}/reporting.R
   stat ${VEP_BASEDIR}/.vep/vep.ini
+
+  # Check that the correct number of documents was imported to MongoDB
+  grep 42307 ${LOG_BUILD_DIR}/mongoimport
