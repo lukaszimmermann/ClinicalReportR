@@ -7,17 +7,33 @@ From: ensemblorg/ensembl-vep:latest
     exec echo "Hello Monsoir Meatball" "$@"
 
 %environment
-  PERL5LIB=/home/vep/loftee-0.3-beta:/home/vep/src/bioperl-live-release-1-6-924
+  PERL5LIB=/opt/vep/loftee-0.3-beta:/opt/vep/src/bioperl-live-release-1-6-924
   export PERL5LIB
+
+  VEP_BASEDIR=/opt/vep
+  export VEP_BASEDIR
+
+  DATA_DIR=/data
+  export DATA_DIR
+
+  TEMP_DIR=/tmp
+  export TEMP_DIR
+
+  REST_API_DIR=/api
+  export REST_API_DIR
 
 %files
 settings.py
 run.py
 vep_docker.ini
 make_report.sh
-reporting.sh
+reporting.R
 
 %post
+########################################################################
+# Install all the required packages for the clinical Reporting pipeline
+########################################################################
+cd ${TEMP_DIR}
 apt-get update -y
 apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5
 apt-get install -y \
@@ -36,18 +52,28 @@ apt-get install -y \
   r-base \
   samtools
 
+########################################################################
+# Set the locale
+########################################################################
+cd ${TEMP_DIR}
 apt-get update -y
 locale-gen "en_US.UTF-8"
 
+########################################################################
+# Install MongoDB
+########################################################################
+cd ${TEMP_DIR}
 echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-3.6.list
 apt-get update -y
 apt-get install -y mongodb-org
 mkdir -p /data/db
 mongod --fork --logpath /mongolog
 
-cd /data
+########################################################################
+# Download and import the MongoDB seed
+########################################################################
+cd ${DATA_DIR}
 wget https://raw.githubusercontent.com/PersonalizedOncology/clinicalReporting_DB_RESTAPI/master/mongo-seed/driver_db_dump.json
-
 mongoimport \
   --host localhost \
   --db clinical_reporting \
@@ -56,53 +82,81 @@ mongoimport \
   --file /data/driver_db_dump.json \
   --drop
 
-# FileDeploy
-cd /home/vep/src/ensembl-vep/
-git pull
-git checkout release/91
-./INSTALL.pl -a acf -s homo_sapiens -y GRCh37
-./INSTALL.pl -a p -g LoFtool
-cd /data
-
-# Move everything to data
-wget http://www.broadinstitute.org/~konradk/loftee/human_ancestor.fa.rz
-wget http://www.broadinstitute.org/~konradk/loftee/human_ancestor.fa.rz.fai
-wget https://raw.githubusercontent.com/Ensembl/VEP_plugins/release/90/LoFtool_scores.txt
-wget https://www.broadinstitute.org/%7Ekonradk/loftee/phylocsf.sql.gz
-gunzip phylocsf.sql.gz
-mv /home/vep/.vep/homo_sapiens /data
-
-
-# REST api
-pip3 install --upgrade pip
-pip3 install simplejson
-pip3 install gunicorn
-pip3 install eve
-mkdir /api
-mv /settings.py /api/settings.py
-mv /run.py /api/run.py
-
-# Clinical Reporting pipeline
-
-# Set up R
-# echo "deb http://cran.rstudio.com/bin/linux/ubuntu xenial/" >> /etc/apt/sources.list
-# echo "deb http://ftp.halifax.rwth-aachen.de/ubuntu xenial-backports main restricted universe" >> /etc/apt/sources.list'
+  ########################################################################
+  # Install R
+  ########################################################################
+  cd ${TEMP_DIR}
+echo "deb http://cran.rstudio.com/bin/linux/ubuntu xenial/" >> /etc/apt/sources.list
+echo "deb http://ftp.halifax.rwth-aachen.de/ubuntu xenial-backports main restricted universe" >> /etc/apt/sources.list
+gpg --keyserver keyserver.ubuntu.com --recv-key E084DAB9
+gpg -a --export E084DAB9 | apt-key add -
 Rscript -e 'install.packages(c("dplyr", "dtplyr", "tidyr", "stringr", "splitstackshape", "flextable", "optparse", "readr", "RCurl", "devtools", "log4r"), dependencies = TRUE, repos = "https://cloud.r-project.org")'
 Rscript -e 'devtools::install_github("jeremystan/tidyjson")'
 Rscript -e 'devtools::install_github("davidgohel/officer")'
 Rscript -e 'source("https://bioconductor.org/biocLite.R"); biocLite(c("VariantAnnotation", "rjson"), ask = FALSE, suppressUpdates = TRUE)'
 
 
-cd /home/vep
+########################################################################
+# Install Ensembl-vep
+########################################################################
+cd ${VEP_BASEDIR}/src/ensembl-vep/
+git pull
+git checkout release/92
+./INSTALL.pl -a acf -s homo_sapiens -y GRCh37
+./INSTALL.pl -a p -g LoFtool
+
+
+########################################################################
+# Install another version of LoFtee
+########################################################################
+# Although LoF is installed via VEP's install script above, it's unclear
+# which version. To be sure, we overwrite it with the latest release on github
+cd ${TEMP_DIR}
 wget https://github.com/konradjk/loftee/archive/v0.3-beta.zip
 unzip v0.3-beta.zip
 rm v0.3-beta.zip
-cp loftee-0.3-beta/LoF.pm /home/vep/.vep/Plugins
+cp loftee-0.3-beta/LoF.pm ${VEP_BASEDIR}/.vep/Plugins
+
+########################################################################
+# Assemble the data directory
+########################################################################
+cd ${DATA_DIR}
+wget http://www.broadinstitute.org/~konradk/loftee/human_ancestor.fa.rz
+wget http://www.broadinstitute.org/~konradk/loftee/human_ancestor.fa.rz.fai
+wget https://raw.githubusercontent.com/Ensembl/VEP_plugins/release/90/LoFtool_scores.txt
+wget https://www.broadinstitute.org/%7Ekonradk/loftee/phylocsf.sql.gz
+gunzip phylocsf.sql.gz
+
+# Move the homo sapiens stuff to the data dir
+mv ${VEP_BASEDIR}/.vep/homo_sapiens ${DATA_DIR}
+
+########################################################################
+# Set up REST API
+########################################################################
+cd ${TEMP_DIR}
+mkdir -p ${REST_API_DIR}
+pip3 install --no-cache-dir --upgrade pip
+pip3 install --no-cache-dir simplejson
+pip3 install --no-cache-dir gunicorn
+pip3 install --no-cache-dir eve
+mv /settings.py  ${REST_API_DIR}/settings.py
+mv /run.py  ${REST_API_DIR}/run.py
+
+########################################################################
+# Install Perl SQLite support
+########################################################################
 cpanm DBD::SQLite
-export PERL5LIB="/home/vep/loftee-0.3-beta/:$PERL5LIB"
-mv /vep_docker.ini /home/vep/.vep/vep.ini
-mv /make_report.sh /home/vep
-mv /reporting.sh /home/vep
-chown -R vep:vep /home/vep
-chmod +x /home/vep/make_report.sh
-chmod +x /home/vep/reporting.R
+
+########################################################################
+# Move the VEP files to the correct location
+########################################################################
+mv /vep_docker.ini ${VEP_BASEDIR}/.vep/vep.ini
+mv /make_report.sh ${VEP_BASEDIR}
+mv /reporting.R ${VEP_BASEDIR}
+
+########################################################################
+# Correct all permissions ans set scripts executanl
+########################################################################
+chown -R vep:vep ${VEP_BASEDIR}
+chmod +x ${VEP_BASEDIR}/make_report.sh
+chmod +x ${VEP_BASEDIR}/reporting.R
