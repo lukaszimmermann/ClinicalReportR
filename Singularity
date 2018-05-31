@@ -97,7 +97,7 @@ mongoimport \
   --db clinical_reporting \
   --collection biograph_genes \
   --jsonArray \
-  --file ${DATA_DIR}/driver_db_dump.json \
+  --file ${TEMPDIR}/driver_db_dump.json \
   --drop > ${LOG_BUILD_DIR}/mongoimport 2>&1
 
   rm -rf ${TEMPDIR}
