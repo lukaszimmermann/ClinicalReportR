@@ -11,6 +11,7 @@ From: ensemblorg/ensembl-vep:latest
     exec echo "Hello Monsoir Meatball" "$@"
 
 %environment
+export OPT=/opt/vep
 export PERL5LIB=/opt/vep/loftee-0.3-beta:/opt/vep/src/bioperl-live-release-1-6-924
 export INOUT_DIR=/inout
 
@@ -21,8 +22,10 @@ ReportApp
 ########################################################################
 # Define environment variables
 ########################################################################
-export PERL5LIB=/opt/vep/loftee-0.3-beta:/opt/vep/src/bioperl-live-release-1-6-924
-export VEP_BASEDIR=/opt/vep
+export OPT=/opt/vep
+export PERL5LIB=${OPT}/loftee-0.3-beta:${OPT}/src/bioperl-live-release-1-6-924
+export VEP_CACHE=${OPT}/.vep/Cache
+export VEP_PLUGINS=${OPT}/.vep/Plugins
 export DATA_DIR=/data
 export REST_API_DIR=/api
 export LOG_BUILD_DIR=/buildlogs
@@ -43,7 +46,7 @@ apt-get install -y \
   libcairo2-dev \
   libcurl4-openssl-dev \
   libpq-dev \
-  libreoffice \
+  libreoffice-common \
   libssh2-1-dev \
   libxml2-dev \
   locales \
@@ -55,13 +58,15 @@ apt-get install -y \
   samtools
 
   rm -rf ${TEMPDIR}
-  ########################################################################
-  # Ensure existence of certain directories
-  ########################################################################
-  mkdir -p ${LOG_BUILD_DIR}
-  mkdir -p ${VEP_BASEDIR}/.vep/Plugins
-  mkdir -p ${DATA_DIR}/db
-  mkdir -p ${INOUT_DIR}
+  
+########################################################################
+# Ensure existence of certain directories
+########################################################################
+mkdir -p ${LOG_BUILD_DIR}
+mkdir -p ${VEP_PLUGINS}
+mkdir -p ${VEP_CACHE}
+mkdir -p ${DATA_DIR}/db
+mkdir -p ${INOUT_DIR}
 
 ########################################################################
 # Set the locale
@@ -120,7 +125,7 @@ rm -rf ${TEMPDIR}
 ########################################################################
 # Install Ensembl-vep
 ########################################################################
-cd ${VEP_BASEDIR}/src/ensembl-vep/
+cd ${OPT}/src/ensembl-vep/
 git pull
 git checkout release/92
 ./INSTALL.pl -a acf -s homo_sapiens -y GRCh37
@@ -137,13 +142,14 @@ cd ${TEMPDIR}
 wget -O ${TEMPDIR}/v0.3-beta.zip \
    https://github.com/konradjk/loftee/archive/v0.3-beta.zip
 unzip v0.3-beta.zip
-cp loftee-0.3-beta/LoF.pm ${VEP_BASEDIR}/.vep/Plugins
+cp loftee-0.3-beta/LoF.pm ${VEP_PLUGINS}
 
 rm -rf ${TEMPDIR}
 ########################################################################
 # Assemble the data directory
 ########################################################################
 cd ${DATA_DIR}
+
 wget -O ${DATA_DIR}/human_ancestor.fa.rz \
  http://www.broadinstitute.org/~konradk/loftee/human_ancestor.fa.rz
 wget -O ${DATA_DIR}/human_ancestor.fa.rz.fai \
@@ -154,8 +160,6 @@ wget -O ${DATA_DIR}/phylocsf.sql.gz \
   https://www.broadinstitute.org/%7Ekonradk/loftee/phylocsf.sql.gz
 gunzip phylocsf.sql.gz
 
-# Move the homo sapiens stuff to the data dir
-mv ${VEP_BASEDIR}/.vep/homo_sapiens ${DATA_DIR}
 
 # Set the data completeness flag
 touch ${DATA_DIR}/completeness.flag
@@ -183,35 +187,35 @@ cpanm DBD::SQLite
 ########################################################################
 # Move the VEP files to the correct location
 ########################################################################
-mv /ReportApp/vep_docker.ini ${VEP_BASEDIR}/.vep/vep.ini
-mv /ReportApp/make_report.sh ${VEP_BASEDIR}
-mv /ReportApp/reporting.R ${VEP_BASEDIR}
+mv /ReportApp/vep_singularity.ini ${OPT}/.vep/vep.ini
+mv /ReportApp/make_report.sh ${OPT}
+mv /ReportApp/reporting.R ${OPT}
 
 ########################################################################
 # Setup docxtemplater
 ########################################################################
-mv /ReportApp/docxtemplater ${VEP_BASEDIR}
-cd ${VEP_BASEDIR}/docxtemplater
+mv /ReportApp/docxtemplater ${OPT}
+cd ${OPT}/docxtemplater
 npm install -g
 
 ########################################################################
 # Correct all permissions and set scripts executable
 ########################################################################
-chown -R vep:vep ${VEP_BASEDIR}
+chown -R vep:vep ${OPT}
 chown -R vep:vep ${INOUT_DIR}
-chmod +x ${VEP_BASEDIR}/make_report.sh
-chmod +x ${VEP_BASEDIR}/reporting.R
+chmod +x ${OPT}/make_report.sh
+chmod +x ${OPT}/reporting.R
 
 ########################################################################
 # Cleanup
 ########################################################################
-rm -rf /tmp/* /var/tmp/* /ReportApp
+rm -rf /ReportApp
 
 %test
   # Test the existence of certain files
-  stat ${VEP_BASEDIR}/make_report.sh
-  stat ${VEP_BASEDIR}/reporting.R
-  stat ${VEP_BASEDIR}/.vep/vep.ini
+  stat /opt/vep/make_report.sh
+  stat /opt/vep/reporting.R
+  stat /opt/vep/.vep/vep.ini
 
   # Check that the correct number of documents was imported to MongoDB
   grep 42307 ${LOG_BUILD_DIR}/mongoimport
