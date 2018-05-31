@@ -12,7 +12,7 @@ From: ensemblorg/ensembl-vep:latest
 
 %environment
 export PERL5LIB=/opt/vep/loftee-0.3-beta:/opt/vep/src/bioperl-live-release-1-6-924
-export OUTPUT_DIR=/output
+export INOUT_DIR=/inout
 
 %files
 ReportApp
@@ -54,10 +54,11 @@ apt-get install -y \
   samtools
 
   ########################################################################
-  # For buildlogs
+  # Ensure existence of certain directories
   ########################################################################
   cd ${TEMP_DIR}
   mkdir -p ${LOG_BUILD_DIR}
+  mkdir -p ${VEP_BASEDIR}/.vep/Plugins
 
 ########################################################################
 # Set the locale
