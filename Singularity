@@ -14,11 +14,7 @@ From: ensemblorg/ensembl-vep:latest
 export PERL5LIB=/opt/vep/loftee-0.3-beta:/opt/vep/src/bioperl-live-release-1-6-924
 
 %files
-settings.py
-run.py
-vep_docker.ini
-make_report.sh
-reporting.R
+ReportApp
 
 %post
 ########################################################################
@@ -30,6 +26,8 @@ export VEP_BASEDIR=/opt/vep
 export DATA_DIR=/data
 export REST_API_DIR=/api
 export LOG_BUILD_DIR=/buildlogs
+export DOCXTEMPLATER_DIR=/docxtemplater
+
 ########################################################################
 # Install all the required packages for the clinical Reporting pipeline
 ########################################################################
@@ -152,8 +150,8 @@ pip3 install --no-cache-dir --upgrade pip
 pip3 install --no-cache-dir simplejson
 pip3 install --no-cache-dir gunicorn
 pip3 install --no-cache-dir eve
-mv /settings.py  ${REST_API_DIR}/settings.py
-mv /run.py  ${REST_API_DIR}/run.py
+mv /ReportApp/settings.py  ${REST_API_DIR}/settings.py
+mv /ReportApp/run.py  ${REST_API_DIR}/run.py
 
 ########################################################################
 # Install Perl SQLite support
@@ -163,9 +161,9 @@ cpanm DBD::SQLite
 ########################################################################
 # Move the VEP files to the correct location
 ########################################################################
-mv /vep_docker.ini ${VEP_BASEDIR}/.vep/vep.ini
-mv /make_report.sh ${VEP_BASEDIR}
-mv /reporting.R ${VEP_BASEDIR}
+mv /ReportApp/vep_docker.ini ${VEP_BASEDIR}/.vep/vep.ini
+mv /ReportApp/make_report.sh ${VEP_BASEDIR}
+mv /ReportApp/reporting.R ${VEP_BASEDIR}
 
 ########################################################################
 # Correct all permissions and set scripts executable
@@ -175,9 +173,16 @@ chmod +x ${VEP_BASEDIR}/make_report.sh
 chmod +x ${VEP_BASEDIR}/reporting.R
 
 ########################################################################
+# Setup docxtemplater
+########################################################################
+mv /ReportApp/docxtemplater ${DOCXTEMPLATER_DIR}
+cd ${DOCXTEMPLATER_DIR}
+npm install -g
+
+########################################################################
 # Cleanup
 ########################################################################
-rm -rf /tmp/* /var/tmp/*
+rm -rf /tmp/* /var/tmp/* /ReportApp
 
 %test
   # Test the existence of certain files
