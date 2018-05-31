@@ -12,6 +12,7 @@ From: ensemblorg/ensembl-vep:latest
 
 %environment
 export PERL5LIB=/opt/vep/loftee-0.3-beta:/opt/vep/src/bioperl-live-release-1-6-924
+export OUTPUT_DIR=/output
 
 %files
 ReportApp
@@ -26,7 +27,7 @@ export VEP_BASEDIR=/opt/vep
 export DATA_DIR=/data
 export REST_API_DIR=/api
 export LOG_BUILD_DIR=/buildlogs
-export DOCXTEMPLATER_DIR=/docxtemplater
+export INOUT_DIR=/inout
 
 ########################################################################
 # Install all the required packages for the clinical Reporting pipeline
@@ -141,6 +142,9 @@ gunzip phylocsf.sql.gz
 # Move the homo sapiens stuff to the data dir
 mv ${VEP_BASEDIR}/.vep/homo_sapiens ${DATA_DIR}
 
+# Set the data completeness flag
+touch ${DATA_DIR}/completeness.flag
+
 ########################################################################
 # Set up REST API
 ########################################################################
@@ -166,18 +170,24 @@ mv /ReportApp/make_report.sh ${VEP_BASEDIR}
 mv /ReportApp/reporting.R ${VEP_BASEDIR}
 
 ########################################################################
+# Setup docxtemplater
+########################################################################
+mv /ReportApp/docxtemplater ${VEP_BASEDIR}
+cd ${VEP_BASEDIR}/docxtemplater
+npm install -g
+
+########################################################################
+# Create the inout dir
+########################################################################
+mkdir -p ${INOUT_DIR}
+
+########################################################################
 # Correct all permissions and set scripts executable
 ########################################################################
 chown -R vep:vep ${VEP_BASEDIR}
+chown -R vep:vep ${INOUT_DIR}
 chmod +x ${VEP_BASEDIR}/make_report.sh
 chmod +x ${VEP_BASEDIR}/reporting.R
-
-########################################################################
-# Setup docxtemplater
-########################################################################
-mv /ReportApp/docxtemplater ${DOCXTEMPLATER_DIR}
-cd ${DOCXTEMPLATER_DIR}
-npm install -g
 
 ########################################################################
 # Cleanup

@@ -44,10 +44,10 @@ ENV PERL5LIB /opt/vep/loftee-0.3-beta/:$PERL5LIB
 COPY vep_docker.ini /opt/vep/.vep/vep.ini
 COPY make_report.sh /opt/vep/
 COPY reporting.R /opt/vep
-RUN mkdir clinicalreporting_docxtemplater
-COPY clinicalreporting_docxtemplater /opt/vep/clinicalreporting_docxtemplater
+RUN mkdir docxtemplater
+COPY docxtemplater /opt/vep/docxtemplater
 
-WORKDIR /opt/vep/clinicalreporting_docxtemplater
+WORKDIR /opt/vep/docxtemplater
 RUN npm install
 
 WORKDIR /opt/vep

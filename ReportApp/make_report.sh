@@ -1,5 +1,5 @@
 #!/bin/bash
-while [ ! -f /data/completeness.flag ]; do 
+while [ ! -f /data/completeness.flag ]; do
 sleep 30
 done
 
@@ -22,12 +22,12 @@ outname="${outfilename%.*}"
 
 # annotate file
 echo "################ Starting variant effect prediction ################"
-vep -i $infile -o $outname.vcf --config /opt/vep/.vep/vep.ini && \
+vep -i $infile -o $outname.vcf --config /opt/vep/.vep/vep.ini
 echo "################ $outfile is created. ################"
 
 # create json
 echo "################ Start to create json ################"
-Rscript /opt/vep/reporting.R -f $outname.vcf -r $outname.json && \
+Rscript /opt/vep/reporting.R -f $outname.vcf -r $outname.json
 echo "################ JSON is created  ################"
 cp base.log /inout
 
@@ -37,7 +37,10 @@ if [[ $savedOut == *"j"* ]]; then
 fi
 
 echo "################ Start to create report ################"
-nodejs /opt/vep/clinicalreporting_docxtemplater/main.js -d $outname.json -t /opt/vep/clinicalreporting_docxtemplater/data/template.docx -o $outname.docx && \
+nodejs /opt/vep/docxtemplater/main.js  \
+    -d $outname.json \
+    -t /opt/vep/docxtemplater/data/template.docx \
+    -o $outname.docx
 echo "################ Report is created  ################"
 if [[ $savedOut == *"w"* ]]; then
     cp $outname.docx  /inout
