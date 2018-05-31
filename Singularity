@@ -21,7 +21,6 @@ ReportApp
 ########################################################################
 # Define environment variables
 ########################################################################
-export TEMP_DIR=/tmp
 export PERL5LIB=/opt/vep/loftee-0.3-beta:/opt/vep/src/bioperl-live-release-1-6-924
 export VEP_BASEDIR=/opt/vep
 export DATA_DIR=/data
@@ -30,9 +29,11 @@ export LOG_BUILD_DIR=/buildlogs
 export INOUT_DIR=/inout
 
 ########################################################################
-# Install all the required packages for the clinical Reporting pipeline
+# Install all the required pack mktemp -dages for the clinical Reporting pipeline
 ########################################################################
-cd ${TEMP_DIR}
+TEMPDIR=$(mktemp -d)
+cd ${TEMPDIR}
+
 apt-get update -y
 apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5
 apt-get update -y
@@ -53,34 +54,43 @@ apt-get install -y \
   r-base \
   samtools
 
+  rm -rf ${TEMPDIR}
   ########################################################################
   # Ensure existence of certain directories
   ########################################################################
-  cd ${TEMP_DIR}
   mkdir -p ${LOG_BUILD_DIR}
   mkdir -p ${VEP_BASEDIR}/.vep/Plugins
+  mkdir -p ${DATA_DIR}/db
+  mkdir -p ${INOUT_DIR}
 
 ########################################################################
 # Set the locale
 ########################################################################
-cd ${TEMP_DIR}
+TEMPDIR=$(mktemp -d)
+cd ${TEMPDIR}
+
 apt-get update -y
 locale-gen "en_US.UTF-8"
 
+rm -rf ${TEMPDIR}
 ########################################################################
 # Install MongoDB
 ########################################################################
-cd ${TEMP_DIR}
+TEMPDIR=$(mktemp -d)
+cd ${TEMPDIR}
+
 echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-3.6.list
 apt-get update -y
 apt-get install -y mongodb-org
-mkdir -p ${DATA_DIR}/db
 
+rm -rf ${TEMPDIR}
 ########################################################################
 # Download and import the MongoDB seed
 ########################################################################
-cd ${DATA_DIR}
-wget -O ${DATA_DIR}/driver_db_dump.json \
+TEMPDIR=$(mktemp -d)
+cd ${TEMPDIR}
+
+wget -O ${TEMPDIR}/driver_db_dump.json \
   https://raw.githubusercontent.com/PersonalizedOncology/clinicalReporting_DB_RESTAPI/master/mongo-seed/driver_db_dump.json
 mongoimport \
   --host localhost \
@@ -90,10 +100,13 @@ mongoimport \
   --file ${DATA_DIR}/driver_db_dump.json \
   --drop > ${LOG_BUILD_DIR}/mongoimport 2>&1
 
+  rm -rf ${TEMPDIR}
   ########################################################################
   # Install R
   ########################################################################
-  cd ${TEMP_DIR}
+  TEMPDIR=$(mktemp -d)
+  cd ${TEMPDIR}
+
 echo "deb http://cran.rstudio.com/bin/linux/ubuntu xenial/" >> /etc/apt/sources.list
 echo "deb http://ftp.halifax.rwth-aachen.de/ubuntu xenial-backports main restricted universe" >> /etc/apt/sources.list
 gpg --keyserver keyserver.ubuntu.com --recv-key E084DAB9
@@ -103,7 +116,7 @@ Rscript -e 'devtools::install_github("jeremystan/tidyjson")'
 Rscript -e 'devtools::install_github("davidgohel/officer")'
 Rscript -e 'source("https://bioconductor.org/biocLite.R"); biocLite(c("VariantAnnotation", "rjson"), ask = FALSE, suppressUpdates = TRUE)'
 
-
+rm -rf ${TEMPDIR}
 ########################################################################
 # Install Ensembl-vep
 ########################################################################
@@ -113,19 +126,20 @@ git checkout release/92
 ./INSTALL.pl -a acf -s homo_sapiens -y GRCh37
 ./INSTALL.pl -a p -g LoFtool
 
-
 ########################################################################
 # Install another version of LoFtee
 ########################################################################
 # Although LoF is installed via VEP's install script above, it's unclear
 # which version. To be sure, we overwrite it with the latest release on github
-cd ${TEMP_DIR}
-wget -O ${TEMP_DIR}/v0.3-beta.zip \
+TEMPDIR=$(mktemp -d)
+cd ${TEMPDIR}
+
+wget -O ${TEMPDIR}/v0.3-beta.zip \
    https://github.com/konradjk/loftee/archive/v0.3-beta.zip
 unzip v0.3-beta.zip
-rm v0.3-beta.zip
 cp loftee-0.3-beta/LoF.pm ${VEP_BASEDIR}/.vep/Plugins
 
+rm -rf ${TEMPDIR}
 ########################################################################
 # Assemble the data directory
 ########################################################################
@@ -149,7 +163,9 @@ touch ${DATA_DIR}/completeness.flag
 ########################################################################
 # Set up REST API
 ########################################################################
-cd ${TEMP_DIR}
+TEMPDIR=$(mktemp -d)
+cd ${TEMPDIR}
+
 mkdir -p ${REST_API_DIR}
 pip3 install --no-cache-dir --upgrade pip
 pip3 install --no-cache-dir simplejson
@@ -158,6 +174,7 @@ pip3 install --no-cache-dir eve
 mv /ReportApp/settings.py  ${REST_API_DIR}/settings.py
 mv /ReportApp/run.py  ${REST_API_DIR}/run.py
 
+rm -rf ${TEMPDIR}
 ########################################################################
 # Install Perl SQLite support
 ########################################################################
@@ -176,11 +193,6 @@ mv /ReportApp/reporting.R ${VEP_BASEDIR}
 mv /ReportApp/docxtemplater ${VEP_BASEDIR}
 cd ${VEP_BASEDIR}/docxtemplater
 npm install -g
-
-########################################################################
-# Create the inout dir
-########################################################################
-mkdir -p ${INOUT_DIR}
 
 ########################################################################
 # Correct all permissions and set scripts executable
