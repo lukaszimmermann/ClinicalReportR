@@ -171,10 +171,9 @@ TEMPDIR=$(mktemp -d)
 cd ${TEMPDIR}
 
 mkdir -p ${REST_API_DIR}
-pip3 install --no-cache-dir --upgrade pip
 pip3 install --no-cache-dir simplejson
-pip3 install --no-cache-dir gunicorn
 pip3 install --no-cache-dir eve
+pip3 install --no-cache-dir gunicorn
 mv /ReportApp/settings.py  ${REST_API_DIR}/settings.py
 mv /ReportApp/run.py  ${REST_API_DIR}/run.py
 
