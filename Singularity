@@ -211,10 +211,14 @@ chmod +x ${OPT}/reporting.R
 rm -rf /ReportApp
 
 %test
+  export LOG_BUILD_DIR=/buildlogs
+  export OPT=/opt/vep
+
   # Test the existence of certain files
-  stat /opt/vep/make_report.sh
-  stat /opt/vep/reporting.R
-  stat /opt/vep/.vep/vep.ini
+  stat ${OPT}/make_report.sh
+  stat ${OPT}/reporting.R
+  stat ${OPT}/.vep/vep.ini
 
   # Check that the correct number of documents was imported to MongoDB
   grep 42307 ${LOG_BUILD_DIR}/mongoimport
+
