@@ -55,10 +55,11 @@ apt-get install -y \
   python3 \
   python3-pip \
   r-base \
-  samtools
+  samtools \
+  sudo
 
   rm -rf ${TEMPDIR}
-  
+
 ########################################################################
 # Ensure existence of certain directories
 ########################################################################
@@ -95,22 +96,28 @@ rm -rf ${TEMPDIR}
 TEMPDIR=$(mktemp -d)
 cd ${TEMPDIR}
 
-wget -O ${TEMPDIR}/driver_db_dump.json \
+wget -O ${TEMPDIR}/db.json \
   https://raw.githubusercontent.com/PersonalizedOncology/clinicalReporting_DB_RESTAPI/master/mongo-seed/driver_db_dump.json
+
+mongod &
+child_pid=$!
+
 mongoimport \
   --host localhost \
   --db clinical_reporting \
   --collection biograph_genes \
   --jsonArray \
-  --file ${TEMPDIR}/driver_db_dump.json \
+  --file ${TEMPDIR}/db.json \
   --drop > ${LOG_BUILD_DIR}/mongoimport 2>&1
 
-  rm -rf ${TEMPDIR}
-  ########################################################################
-  # Install R
-  ########################################################################
-  TEMPDIR=$(mktemp -d)
-  cd ${TEMPDIR}
+kill ${child_pid}
+
+rm -rf ${TEMPDIR}
+########################################################################
+# Install R
+########################################################################
+TEMPDIR=$(mktemp -d)
+cd ${TEMPDIR}
 
 echo "deb http://cran.rstudio.com/bin/linux/ubuntu xenial/" >> /etc/apt/sources.list
 echo "deb http://ftp.halifax.rwth-aachen.de/ubuntu xenial-backports main restricted universe" >> /etc/apt/sources.list
@@ -125,11 +132,16 @@ rm -rf ${TEMPDIR}
 ########################################################################
 # Install Ensembl-vep
 ########################################################################
+chown -R vep:vep ${OPT}
+
+su vep <<'EOF'
 cd ${OPT}/src/ensembl-vep/
 git pull
 git checkout release/92
 ./INSTALL.pl -a acf -s homo_sapiens -y GRCh37
 ./INSTALL.pl -a p -g LoFtool
+EOF
+
 
 ########################################################################
 # Install another version of LoFtee
@@ -144,6 +156,7 @@ wget -O ${TEMPDIR}/v0.3-beta.zip \
 unzip v0.3-beta.zip
 cp loftee-0.3-beta/LoF.pm ${VEP_PLUGINS}
 
+chown -R vep:vep ${VEP_PLUGINS}
 rm -rf ${TEMPDIR}
 ########################################################################
 # Assemble the data directory
@@ -202,6 +215,7 @@ npm install -g
 ########################################################################
 chown -R vep:vep ${OPT}
 chown -R vep:vep ${INOUT_DIR}
+chmod u+rwx ${INOUT_DIR}
 chmod +x ${OPT}/make_report.sh
 chmod +x ${OPT}/reporting.R
 
@@ -221,4 +235,3 @@ rm -rf /ReportApp
 
   # Check that the correct number of documents was imported to MongoDB
   grep 42307 ${LOG_BUILD_DIR}/mongoimport
-
