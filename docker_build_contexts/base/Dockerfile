@@ -41,6 +41,7 @@ WORKDIR /opt/vep/src/ensembl-vep
 RUN git checkout release/93 && \
     git pull origin release/93 && \
     chmod +x /opt/vep/src/ensembl-vep/INSTALL.pl && \
+    chmod +x /opt/vep/src/ensembl-vep/vep && \
     /opt/vep/src/ensembl-vep/INSTALL.pl -a acf -s homo_sapiens -y GRCh37 && \
     /opt/vep/src/ensembl-vep/INSTALL.pl -a p -g LoFtool && \
     mkdir -p "${DATA_INSTALL}" && \
