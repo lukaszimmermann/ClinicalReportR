@@ -29,7 +29,9 @@ RUN apt-get update -y && \
     Rscript -e 'devtools::install_github("jeremystan/tidyjson")' && \
     Rscript -e 'devtools::install_github("davidgohel/officer")' && \
     Rscript -e 'source("https://bioconductor.org/biocLite.R"); biocLite(c("VariantAnnotation", "rjson"), ask = FALSE)' && \
-    cpanm DBD::SQLite
+    cpanm DBD::SQLite && \
+    mkdir -p /inout && \
+    chown -R vep:vep /inout
 
 USER vep
 COPY vep.ini /opt/vep.ini
