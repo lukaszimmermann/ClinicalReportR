@@ -32,3 +32,6 @@ cpanm DBD::SQLite
 mkdir -p /inout
 chown -R vep:vep /inout
 chown -R vep:vep /opt
+
+# Make opt writeable for vep
+chmod u+w /opt

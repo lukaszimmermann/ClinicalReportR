@@ -9,9 +9,8 @@ fi
 CACHE_DIR="/opt/vep/.vep"
 DATA_INSTALL="/tmp/data_install"
 
-cd /opt/vep/src/ensembl-vep
-
 # Install VEP
+cd /opt/vep/src/ensembl-vep
 git checkout release/93
 git pull origin release/93
 chmod +x /opt/vep/src/ensembl-vep/INSTALL.pl
