@@ -1,14 +1,9 @@
-FROM lukaszimmermann/clinical-reporting-base:v1
+FROM lukaszimmermann/clinical-reporting-base:latest
 LABEL maintainer="luk.zim91@gmail.com"
 
-USER root
-WORKDIR /tmp
-RUN mkdir -p /inout && \
-    chown -R vep:vep /inout && \
-    chown -R vep:vep /opt
-
 USER vep
-WORKDIR /opt
+COPY apps/reporting /opt/reporting
+COPY apps/templater /opt/templater
 COPY report_generate.py /opt
 
 # install ReportApp and templater

@@ -1,11 +1,20 @@
 #!/bin/bash
 set -e
 
-    git clone https://github.com/PersonalizedOncology/ClinicalReportR.git && \
-    mv  ClinicalReportR/ReportApp .. && \
-    rm -rf ClinicalReportR && \
-    chmod +x /opt/ReportApp/reporting.R && \
-    mv /opt/ReportApp/clinicalreporting_docxtemplater /opt/templater
+# Check that the directories are present
+if [ ! -d /opt/reporting ]; then
+  echo "FATAL: /opt/reporting  not found"
+  exit 1
+fi
 
-WORKDIR /opt/vep/src/ensembl-vep
-ENTRYPOINT [ "python", "/opt/report_generate.py" ]
+if [ ! -d /opt/templater ]; then
+  echo "FATAL: /opt/templater not found"
+  exit 2
+fi
+
+# Install Reporting
+chmod +x /opt/reporting/reporting.R
+
+# Install templater
+cd /opt/templater
+npm install -y
