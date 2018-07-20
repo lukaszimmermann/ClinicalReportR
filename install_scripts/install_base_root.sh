@@ -7,6 +7,7 @@ apt-get install -y --no-install-recommends --no-install-suggests \
       apt-utils
 apt-get install -y --no-install-recommends --no-install-suggests \
       apt-transport-https \
+      gfortran \
       libcairo2-dev \
       libcurl4-openssl-dev \
       libpq-dev \
@@ -35,3 +36,4 @@ chown -R vep:vep /opt
 
 # Make opt writeable for vep
 chmod u+w /opt
+

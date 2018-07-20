@@ -179,10 +179,12 @@ if (nrow(mvld) == 0) {
 # now query our noSQL database for information on drugs and driver status for all genes occuring in the
 # mvld. Then create a relational schema for each with hgnc_id as our 'key', resulting in 3 tables, one each for genes, drivers, and drugs.
 
-db_baseurl = 'http://localhost:5000/biograph_genes?where={"hgnc_id":{"$in":["'
-querystring = URLencode(paste(db_baseurl, paste(unique(mvld$hgnc_id), collapse = '","'), '"]}}', sep=''))
+# No more getting the data from localhost
+# db_baseurl = 'http://localhost:5000/biograph_genes?where={"hgnc_id":{"$in":["'
+# querystring = URLencode(paste(db_baseurl, paste(unique(mvld$hgnc_id), collapse = '","'), '"]}}', sep=''))
+# biograph_json <- as.tbl_json(getURL(querystring))
 
-biograph_json <- as.tbl_json(getURL(querystring))
+biograph_json <- read_file("/opt/driver.json") 
 
 # get information on genes by hgnc_id
 biograph_genes <- biograph_json %>%

@@ -1,18 +1,21 @@
 FROM lukaszimmermann/clinical-reporting-base:latest
 LABEL maintainer="luk.zim91@gmail.com"
 
-USER vep
+USER root
 COPY apps/reporting /opt/reporting
 COPY apps/templater /opt/templater
-COPY report_generate.py /opt
+COPY entrypoint.py /opt
 
-# install ReportApp and templater
-RUN chmod -R u+w /opt && \
-    git clone https://github.com/PersonalizedOncology/ClinicalReportR.git && \
-    mv  ClinicalReportR/ReportApp .. && \
-    rm -rf ClinicalReportR && \
-    chmod +x /opt/ReportApp/reporting.R && \
-    mv /opt/ReportApp/clinicalreporting_docxtemplater /opt/templater
+WORKDIR /opt/templater
+RUN npm install --global && \
+    wget -O /opt/driver.json https://raw.githubusercontent.com/PersonalizedOncology/clinicalReporting_DB_RESTAPI/master/mongo-seed/driver_db_dump.json && \
+    chown -R vep:vep /opt/reporting && \
+    chown -R vep:vep /opt/templater && \
+    chown vep:vep /opt/driver.json
 
+# Execution environment
+USER vep
 WORKDIR /opt/vep/src/ensembl-vep
-ENTRYPOINT [ "python", "/opt/report_generate.py" ]
+VOLUME /inout
+ENTRYPOINT [ "python3", "/opt/entrypoint.py" ]
+

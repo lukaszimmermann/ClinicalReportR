@@ -33,3 +33,7 @@ cp "${DATA_INSTALL}/human_ancestor.fa.rz" "${CACHE_DIR}"
 cp "${DATA_INSTALL}/human_ancestor.fa.rz.fai" "${CACHE_DIR}"
 cp "${DATA_INSTALL}/LoFtool_scores.txt" "${CACHE_DIR}"
 cp "${DATA_INSTALL}/phylocsf.sql" "${CACHE_DIR}"
+cp -a "${DATA_INSTALL}/loftee-0.3-beta" "${CACHE_DIR}/Plugins"
+
+rm -rf "${DATA_INSTALL}"
+
