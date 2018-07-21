@@ -37,3 +37,6 @@ chown -R vep:vep /opt
 # Make opt writeable for vep
 chmod u+w /opt
 
+# Cleanup
+rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+sync

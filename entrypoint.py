@@ -47,7 +47,9 @@ def remove_extension(file_path):
 def process(*commands):
     print("Executing: " + ' '.join(commands))
 
-    process = subprocess.Popen(commands)
+    my_env = os.environ.copy()
+    my_env["PERL5PATH"] = "/opt/vep/.vep/Plugins/loftee-0.3-beta:"
+    process = subprocess.Popen(commands, env=my_env)
     process.communicate()
     return process.wait()
   
@@ -72,6 +74,7 @@ def print_sep2():
 
 def main(argv):
 
+
     vcf_files_dir = '/inout'
     print("Looking for VCF files in the following container directory: {}".format(vcf_files_dir))    
     vcf_files = list_unannotated_vcf_files(vcf_files_dir)
@@ -82,6 +85,7 @@ def main(argv):
     for vcf_file in vcf_files:
         print(vcf_file)
     print_sep1()
+
     # Process each of the files in turn
     for vcf_file in vcf_files:
        print("Processing: {}".format(vcf_file))       
@@ -93,12 +97,20 @@ def main(argv):
         
        # Step: Generation of data for report
        (inpt, out) = prepare_in_out(base_name, 'annotated.vcf', 'json')
-       result = process("/opt/ReportApp/reporting.R", "-f", inpt, "-r", out)
-     
+       result = process("Rscript",
+                        "--no-save",
+                        "--no-restore",
+                        "--no-init-file",
+                        "--no-site-file",
+                        "/opt/reporting/reporting.R", "-f", inpt, "-r", out)
+    
        # Step: Reporting:
        (inpt, out) = prepare_in_out(base_name, 'json', 'docx')
-       result = process("/opt/docxtemplater/templater.js", "-d", inpt, "-t", "/opt/docxtemplater/data/template.docx", "-o",  out)
-
+       result = process("/usr/bin/nodejs",
+                        "/opt/templater/main.js",
+                        "-d", inpt, 
+                        "-t", "/opt/templater/data/template.docx",
+                        "-o",  out)
        print_sep2()
 
 if __name__ == '__main__':

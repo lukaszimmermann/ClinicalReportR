@@ -1,5 +1,3 @@
-#!/usr/bin/env Rscript --no-save --no-restore --no-init-file --no-site-file
-
 # reporting.R
 # Julian Heinrich (julian@joules.de)
 # Bilge Sürün (sueruen@informatik.uni-tuebingen.de)
