@@ -1,4 +1,4 @@
-FROM lukaszimmermann/clinical-reporting-base:latest
+FROM clinical-reporting-base:latest
 LABEL maintainer="luk.zim91@gmail.com"
 
 USER root
