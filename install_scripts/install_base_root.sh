@@ -8,8 +8,10 @@ apt-get install -y --no-install-recommends --no-install-suggests \
 apt-get install -y --no-install-recommends --no-install-suggests \
       apt-transport-https \
       gfortran \
+      libblas-dev \
       libcairo2-dev \
       libcurl4-openssl-dev \
+      liblapack-dev \
       libpq-dev \
       libreoffice-common \
       libssh2-1-dev \
