@@ -1,0 +1,15 @@
+FROM ensemblorg/ensembl-vep:release_93
+LABEL maintainer="luk.zim91@gmail.com"
+
+USER root
+COPY install_scripts/install_base_root.sh /opt
+COPY install_scripts/install_base_vep.sh /opt
+RUN chmod +x /opt/install_base_root.sh && \
+    chmod +x /opt/install_base_vep.sh && \
+    /opt/install_base_root.sh && \
+    rm /opt/install_base_root.sh
+
+USER vep
+RUN /opt/install_base_vep.sh && \
+    rm /opt/install_base_vep.sh
+

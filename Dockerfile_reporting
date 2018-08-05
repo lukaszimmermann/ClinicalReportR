@@ -1,0 +1,24 @@
+FROM clinical-reporting-base:latest
+LABEL maintainer="luk.zim91@gmail.com"
+
+USER root
+COPY apps/reporting /opt/reporting
+COPY apps/templater /opt/templater
+COPY entrypoint.py /opt
+COPY vep.ini /opt/vep.ini
+
+WORKDIR /opt/templater
+RUN chown vep:vep /opt/vep.ini && \
+    npm install --global -y && \
+    npm install -y && \
+    wget -O /opt/driver.json https://raw.githubusercontent.com/PersonalizedOncology/clinicalReporting_DB_RESTAPI/master/mongo-seed/driver_db_dump.json && \
+    chown -R vep:vep /opt/reporting && \
+    chown -R vep:vep /opt/templater && \
+    chown vep:vep /opt/driver.json && \
+
+# Execution environment
+USER vep
+WORKDIR /opt/vep/src/ensembl-vep
+VOLUME /inout
+ENTRYPOINT [ "python3", "/opt/entrypoint.py" ]
+
